@@ -1,3 +1,3 @@
 export default {
-  KNIGHT: 'knight',
+  PIECE: 'piece',
 }
