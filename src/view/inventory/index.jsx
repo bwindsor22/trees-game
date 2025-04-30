@@ -30,7 +30,7 @@ const row4 = [
     {val: 5, width: largeWidth, type: 'tree-large'},
 ]
 
-const Inventory = ({ piecesInInventory }) => {
+export default ({ piecesInInventory }) => {
     // Find piece for a specific inventory position
     const getPieceForPosition = (position) => {
         for (const pieceId in piecesInInventory) {
@@ -112,5 +112,3 @@ const Inventory = ({ piecesInInventory }) => {
         <Row>{JSON.stringify(piecesInInventory)}</Row>
     </Container>
 }
-
-export default Inventory;

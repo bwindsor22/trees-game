@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { observe } from './Game';
+import { observe, getBoardState } from './Game';
 
 // Create context
 const GameContext = createContext();
