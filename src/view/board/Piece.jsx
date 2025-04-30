@@ -24,7 +24,7 @@ const pieceImages = {
 
 export const Piece = ({ type, id, fillContainer = false }) => {
   const [{ isDragging }, drag, preview] = useDrag({
-    item: { type: ItemTypes.PIECE, id },
+    item: { type: ItemTypes.PIECE, id, type },
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),

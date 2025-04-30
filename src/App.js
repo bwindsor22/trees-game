@@ -5,6 +5,8 @@ import Board from './view/board/Board';
 import Inventory from './view/inventory/index';
 import { GameProvider, useGameState } from './view/board/GameContext';
 import { Container, Row, Col } from 'react-bootstrap';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const GameContent = () => {
   const { boardState, piecesInInventory } = useGameState();
@@ -28,6 +30,7 @@ const App = () => {
     <DndProvider backend={HTML5Backend}>
       <GameProvider>
         <GameContent />
+        <ToastContainer position="top-right" autoClose={3000} />
       </GameProvider>
     </DndProvider>
   );
