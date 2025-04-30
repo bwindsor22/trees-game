@@ -53,19 +53,11 @@ export function observe(o) {
   };
 }
 
-export function canMovePiece(pieceId, toX, toY, targetLocation, sunPoints) {
-  const pieceValues = {
-    'seed': 1,
-    'tree-small': 2,
-    'tree-medium': 3,
-    'tree-large': 4
-  };
-
-  // If moving to board, check position availability and sun points
-  if (targetLocation === 'board' && piecesInInventory[pieceId]) {
+export function canMovePiece(pieceId, toX, toY, targetLocation) {
+  // If moving to board, check if the position is already occupied
+  if (targetLocation === 'board') {
     const boardKey = `${toX},${toY}`;
-    const pieceValue = pieceValues[piecesInInventory[pieceId].type] || 0;
-    return boardState[boardKey] === undefined && pieceValue <= sunPoints;
+    return boardState[boardKey] === undefined;
   }
   
   // Allow moving to inventory freely

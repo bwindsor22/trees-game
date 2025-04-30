@@ -8,11 +8,11 @@ import Overlay from "../board/Overlay"
 import { Piece } from "../board/Piece"
 
 export default (props) => {
-    const { val, width, inventoryPosition, inventoryPiece, sunPoints } = props
+    const { val, width, inventoryPosition, inventoryPiece } = props
     
     const [{ isOver, canDrop }, drop] = useDrop({
         accept: ItemTypes.PIECE,
-        canDrop: (item) => canMovePiece(item.id, inventoryPosition, 0, 'inventory', props.sunPoints),
+        canDrop: (item) => canMovePiece(item.id, inventoryPosition, 0, 'inventory'),
         drop: (item) => movePiece(item.id, inventoryPosition, 0, 'inventory'),
         collect: (monitor) => ({
             isOver: !!monitor.isOver(),
