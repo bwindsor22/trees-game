@@ -12,9 +12,12 @@ export const GameProvider = ({ children }) => {
 
   useEffect(() => {
     // Subscribe to game state changes
-    const unsubscribe = observe((newBoardState, newInventory) => {
+    const unsubscribe = observe((newBoardState, newInventory, options = {}) => {
       setBoardState(newBoardState);
       setPiecesInInventory(newInventory);
+      if (options.sunPointsChange) {
+        setSunPoints(prev => Math.max(0, prev + options.sunPointsChange));
+      }
     });
 
     // Unsubscribe on component unmount

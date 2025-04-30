@@ -38,8 +38,8 @@ initializeInventory();
 
 let observers = [];
 
-function emitChange() {
-  observers.forEach((o) => o && o({ ...boardState }, { ...piecesInInventory }));
+function emitChange(options = {}) {
+  observers.forEach((o) => o && o({ ...boardState }, { ...piecesInInventory }, options));
 }
 
 export function observe(o) {
@@ -65,10 +65,21 @@ export function canMovePiece(pieceId, toX, toY, targetLocation) {
 }
 
 export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
-  // Moving piece from inventory to board
+  const pieceValues = {
+  'seed': 1,
+  'tree-small': 2,
+  'tree-medium': 3,
+  'tree-large': 4
+};
+
+// Moving piece from inventory to board
   if (piecesInInventory[pieceId] && targetLocation === 'board') {
     const pieceType = piecesInInventory[pieceId].type;
     const boardKey = `${toX},${toY}`;
+    
+    // Update sun points
+    const pieceValue = pieceValues[pieceType] || 0;
+    emitChange({ sunPointsChange: -pieceValue });
     
     // Add piece to board
     boardState = {
