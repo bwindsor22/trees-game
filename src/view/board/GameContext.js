@@ -8,6 +8,7 @@ const GameContext = createContext();
 export const GameProvider = ({ children }) => {
   const [boardState, setBoardState] = useState({});
   const [piecesInInventory, setPiecesInInventory] = useState({});
+  const [sunPoints, setSunPoints] = useState(10);
 
   useEffect(() => {
     // Subscribe to game state changes
@@ -21,7 +22,7 @@ export const GameProvider = ({ children }) => {
   }, []);
 
   return (
-    <GameContext.Provider value={{ boardState, piecesInInventory }}>
+    <GameContext.Provider value={{ boardState, piecesInInventory, sunPoints, setSunPoints }}>
       {children}
     </GameContext.Provider>
   );
@@ -34,4 +35,14 @@ export const useGameState = () => {
     throw new Error('useGameState must be used within a GameProvider');
   }
   return context;
+};
+
+export const SunPointsDisplay = () => {
+  const { sunPoints } = useGameState();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+      <span style={{ marginRight: '5px' }}>☀️</span>
+      <span>{sunPoints}</span>
+    </div>
+  );
 };

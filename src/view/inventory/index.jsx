@@ -1,5 +1,6 @@
 import React from 'react'
 import Blank from './blank'
+import SunPoints from './SunPoints'
 import { Container, Col, Row } from "react-bootstrap"
 
 const seedWidth = 60;
@@ -46,6 +47,7 @@ export default ({ piecesInInventory }) => {
     let inventoryIndex = 0;
     
     return <Container>
+        <SunPoints />
         <Row>
             {row1.map((r, i) => {
                 const currentIndex = inventoryIndex++;
