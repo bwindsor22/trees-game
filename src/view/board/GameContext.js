@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { observe, getBoardState } from './Game';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { observe, getBoardState } from "./Game";
 
 // Create context
 const GameContext = createContext();
@@ -16,7 +16,7 @@ export const GameProvider = ({ children }) => {
       setBoardState(newBoardState);
       setPiecesInInventory(newInventory);
       if (options.sunPointsChange) {
-        setSunPoints(prev => Math.max(0, prev + options.sunPointsChange));
+        setSunPoints((prev) => Math.max(0, prev + options.sunPointsChange));
       }
     });
 
@@ -25,7 +25,9 @@ export const GameProvider = ({ children }) => {
   }, []);
 
   return (
-    <GameContext.Provider value={{ boardState, piecesInInventory, sunPoints, setSunPoints }}>
+    <GameContext.Provider
+      value={{ boardState, piecesInInventory, sunPoints, setSunPoints }}
+    >
       {children}
     </GameContext.Provider>
   );
@@ -35,17 +37,7 @@ export const GameProvider = ({ children }) => {
 export const useGameState = () => {
   const context = useContext(GameContext);
   if (!context) {
-    throw new Error('useGameState must be used within a GameProvider');
+    throw new Error("useGameState must be used within a GameProvider");
   }
   return context;
-};
-
-export const SunPointsDisplay = () => {
-  const { sunPoints } = useGameState();
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
-      <span style={{ marginRight: '5px' }}>☀️</span>
-      <span>{sunPoints}</span>
-    </div>
-  );
 };

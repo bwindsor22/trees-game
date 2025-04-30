@@ -59,6 +59,7 @@ export default ({ piecesInInventory }) => {
                         inventoryPosition={currentIndex}
                         inventoryPiece={piece}
                         pieceId={piece ? piece.id : null}
+                        sunPoints={sunPoints}
                     />
                 </Col>
             })}
