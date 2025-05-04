@@ -1,13 +1,163 @@
 import { pieceValues } from './pieceValues';
 
+let boardState = {};
+let piecesInInventory = {};
+let piecesAvailable = {};
 
-// Track all pieces on the board and their types
-let boardState = {}; // Format: {"x,y": {type: "seed", id: "unique-id"}}
-let piecesInInventory = {}; // Format: {id: {type: "seed", position: inventoryIndex}}
+let observers = [];
 
-// Generate initial inventory with all pieces
+function emitChange(options = {}) {
+  observers.forEach((o) => o && o(
+    { ...boardState }, 
+    { ...piecesInInventory }, 
+    { ...piecesAvailable },
+    options
+  ));
+}
+
+export function observe(o) {
+  observers.push(o);
+  o({ ...boardState }, { ...piecesInInventory }, { ...piecesAvailable });
+  return () => {
+    observers = observers.filter((t) => t !== o);
+  };
+}
+
+export function canMovePiece(pieceId, toX, toY, targetLocation, sunPoints) {
+  if (targetLocation === 'board') {
+    // Only allow moves from inventory or available to board
+    const isFromInventory = pieceId in piecesInInventory;
+    const isFromAvailable = pieceId in piecesAvailable;
+    if (!isFromInventory && !isFromAvailable) return false;
+    
+    // Get the piece type and calculate the cost
+    let pieceType;
+    if (isFromInventory) {
+      pieceType = piecesInInventory[pieceId].type;
+    } else {
+      pieceType = piecesAvailable[pieceId].type;
+    }
+    
+    const movementCost = movementCosts[pieceType] || 0;
+    const inventoryCost = isFromInventory ? (pieceValues[pieceType] || 0) : 0;
+    const totalCost = movementCost + inventoryCost;
+    
+    // Check if there are enough sun points
+    if (totalCost > sunPoints) return false;
+    
+    const boardKey = `${toX},${toY}`;
+    return boardState[boardKey] === undefined;
+  }
+  
+  if (targetLocation === 'available') {
+    // Only allow moves from inventory to available
+    const isFromInventory = pieceId in piecesInInventory;
+    const isFromBoard = Object.values(boardState).some(piece => piece.id === pieceId);
+    if (!isFromInventory || isFromBoard) return false;
+    
+    // Check if there are enough sun points for the piece value
+    const pieceType = piecesInInventory[pieceId].type;
+    const pieceValue = pieceValues[pieceType] || 0;
+    if (pieceValue > sunPoints) return false;
+    
+    return true;
+  }
+  
+  if (targetLocation === 'inventory') {
+    // Don't allow moves to inventory
+    return false;
+  }
+  
+  return true;
+}
+
+export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
+  if (targetLocation === 'board') {
+    let pieceType;
+    let fromLocation;
+    
+    // Check if piece is from inventory
+    if (piecesInInventory[pieceId]) {
+      pieceType = piecesInInventory[pieceId].type;
+      fromLocation = 'inventory';
+    } 
+    // Check if piece is from available
+    else if (piecesAvailable[pieceId]) {
+      pieceType = piecesAvailable[pieceId].type;
+      fromLocation = 'available';
+    }
+    
+    if (pieceType) {
+      const boardKey = `${toX},${toY}`;
+      const movementCost = movementCosts[pieceType] || 0;
+      const inventoryCost = fromLocation === 'inventory' ? (pieceValues[pieceType] || 0) : 0;
+      const totalCost = movementCost + inventoryCost;
+      
+      boardState = {
+        ...boardState,
+        [boardKey]: { type: pieceType, id: pieceId }
+      };
+      
+      if (fromLocation === 'inventory') {
+        const newInventory = { ...piecesInInventory };
+        delete newInventory[pieceId];
+        piecesInInventory = newInventory;
+      } else {
+        const newAvailable = { ...piecesAvailable };
+        delete newAvailable[pieceId];
+        piecesAvailable = newAvailable;
+      }
+      
+      emitChange({ sunPointsChange: -totalCost });
+    }
+  } 
+  else if (targetLocation === 'available') {
+    if (piecesInInventory[pieceId]) {
+      const pieceType = piecesInInventory[pieceId].type;
+      const pieceValue = pieceValues[pieceType] || 0;
+      
+      piecesAvailable = {
+        ...piecesAvailable,
+        [pieceId]: { type: pieceType, position: toX }
+      };
+      
+      const newInventory = { ...piecesInInventory };
+      delete newInventory[pieceId];
+      piecesInInventory = newInventory;
+      
+      emitChange({ sunPointsChange: -pieceValue });
+    }
+  }
+  
+  emitChange();
+}
+
+export function getBoardState() {
+  return { 
+    boardState: { ...boardState }, 
+    piecesInInventory: { ...piecesInInventory },
+    piecesAvailable: { ...piecesAvailable }
+  };
+}
+
+// Initialize inventory
+const movementCosts = {
+  'seed': 0,
+  'tree-small': 1,
+  'tree-medium': 2,
+  'tree-large': 3
+};
+
 function initializeInventory() {
   let id = 0;
+  
+  // Initialize available pieces first
+  piecesAvailable = {
+    [id++]: { type: 'seed', position: 0 },
+    [id++]: { type: 'seed', position: 1 },
+    [id++]: { type: 'tree-small', position: 2 },
+    [id++]: { type: 'tree-small', position: 3 }
+  };
   
   // Add seeds (Row 1)
   for (let i = 0; i < 4; i++) {
@@ -34,119 +184,4 @@ function initializeInventory() {
   }
 }
 
-// Initialize inventory at module load
 initializeInventory();
-
-let observers = [];
-
-function emitChange(options = {}) {
-  observers.forEach((o) => o && o({ ...boardState }, { ...piecesInInventory }, options));
-}
-
-export function observe(o) {
-  observers.push(o);
-  
-  // Immediately call the observer with the current state
-  o({ ...boardState }, { ...piecesInInventory });
-  
-  return () => {
-    observers = observers.filter((t) => t !== o);
-  };
-}
-
-export function canMovePiece(pieceId, toX, toY, targetLocation) {
-  // If moving to board, check if the position is already occupied
-  if (targetLocation === 'board') {
-    const boardKey = `${toX},${toY}`;
-    return boardState[boardKey] === undefined;
-  }
-  
-  // Allow moving to inventory freely
-  return true;
-}
-
-export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
-// Moving piece from inventory to board
-  if (piecesInInventory[pieceId] && targetLocation === 'board') {
-    const pieceType = piecesInInventory[pieceId].type;
-    const boardKey = `${toX},${toY}`;
-    
-    // Update sun points
-    const pieceValue = pieceValues[pieceType] || 0;
-    emitChange({ sunPointsChange: -pieceValue });
-    
-    // Add piece to board
-    boardState = {
-      ...boardState,
-      [boardKey]: { type: pieceType, id: pieceId }
-    };
-    
-    // Remove from inventory
-    const newInventory = { ...piecesInInventory };
-    delete newInventory[pieceId];
-    piecesInInventory = newInventory;
-  } 
-  // Moving piece from board to inventory
-  else if (targetLocation === 'inventory') {
-    // Find piece on board
-    let boardKey = null;
-    let pieceType = null;
-    
-    for (const key in boardState) {
-      if (boardState[key].id === pieceId) {
-        boardKey = key;
-        pieceType = boardState[key].type;
-        break;
-      }
-    }
-    
-    if (boardKey) {
-      // Add to inventory
-      piecesInInventory = {
-        ...piecesInInventory,
-        [pieceId]: { type: pieceType, position: toX }
-      };
-      
-      // Remove from board
-      const newBoardState = { ...boardState };
-      delete newBoardState[boardKey];
-      boardState = newBoardState;
-    }
-  }
-  // Moving piece on the board
-  else if (targetLocation === 'board') {
-    // Find piece on board
-    let oldBoardKey = null;
-    let pieceType = null;
-    
-    for (const key in boardState) {
-      if (boardState[key].id === pieceId) {
-        oldBoardKey = key;
-        pieceType = boardState[key].type;
-        break;
-      }
-    }
-    
-    if (oldBoardKey) {
-      // Create new board state
-      const newBoardState = { ...boardState };
-      
-      // Add to new position
-      const newBoardKey = `${toX},${toY}`;
-      newBoardState[newBoardKey] = { type: pieceType, id: pieceId };
-      
-      // Remove from old position
-      delete newBoardState[oldBoardKey];
-      
-      // Update board state
-      boardState = newBoardState;
-    }
-  }
-  
-  // Notify observers of the changes
-  emitChange();
-}
-
-export function getBoardState() {
-  return { boardState: { ...boardState }, piecesInInventory: { ...piecesInInventory } };
-}

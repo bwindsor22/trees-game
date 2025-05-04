@@ -1,37 +1,41 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { observe, getBoardState } from './Game';
 
-// Create context
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { observe } from './Game';
+
 const GameContext = createContext();
 
-// Provider component
 export const GameProvider = ({ children }) => {
   const [boardState, setBoardState] = useState({});
   const [piecesInInventory, setPiecesInInventory] = useState({});
+  const [piecesAvailable, setPiecesAvailable] = useState({});
   const [sunPoints, setSunPoints] = useState(10);
 
   useEffect(() => {
-    // Subscribe to game state changes
-    const unsubscribe = observe((newBoardState, newInventory, options = {}) => {
+    const unsubscribe = observe((newBoardState, newInventory, newAvailable, options = {}) => {
       setBoardState(newBoardState);
       setPiecesInInventory(newInventory);
+      setPiecesAvailable(newAvailable);
       if (options.sunPointsChange) {
         setSunPoints(prev => Math.max(0, prev + options.sunPointsChange));
       }
     });
 
-    // Unsubscribe on component unmount
     return () => unsubscribe();
   }, []);
 
   return (
-    <GameContext.Provider value={{ boardState, piecesInInventory, sunPoints, setSunPoints }}>
+    <GameContext.Provider value={{ 
+      boardState, 
+      piecesInInventory, 
+      piecesAvailable,
+      sunPoints,
+      setSunPoints 
+    }}>
       {children}
     </GameContext.Provider>
   );
 };
 
-// Custom hook for using the game state
 export const useGameState = () => {
   const context = useContext(GameContext);
   if (!context) {
