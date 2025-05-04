@@ -90,6 +90,7 @@ export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
   else if (targetLocation === 'available') {
     if (piecesInInventory[pieceId]) {
       const pieceType = piecesInInventory[pieceId].type;
+      const pieceValue = pieceValues[pieceType] || 0;
       
       piecesAvailable = {
         ...piecesAvailable,
@@ -99,6 +100,8 @@ export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
       const newInventory = { ...piecesInInventory };
       delete newInventory[pieceId];
       piecesInInventory = newInventory;
+      
+      emitChange({ sunPointsChange: -pieceValue });
     }
   }
   
