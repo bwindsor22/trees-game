@@ -27,7 +27,7 @@ export const Piece = ({ type, id, sunPoints, fillContainer = false }) => {
   const pieceValue = pieceValues[type] || 0;
   const [{ isDragging }, drag, preview] = useDrag({
     item: { type: ItemTypes.PIECE, id },
-    canDrag: pieceValue <= sunPoints,
+    canDrag: sunPoints === undefined || pieceValue <= sunPoints,
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
