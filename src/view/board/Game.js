@@ -1,4 +1,5 @@
-// Game.js - Modified to support React state management
+import { pieceValues } from './pieceValues';
+
 
 // Track all pieces on the board and their types
 let boardState = {}; // Format: {"x,y": {type: "seed", id: "unique-id"}}
@@ -65,13 +66,6 @@ export function canMovePiece(pieceId, toX, toY, targetLocation) {
 }
 
 export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
-  const pieceValues = {
-  'seed': 1,
-  'tree-small': 2,
-  'tree-medium': 3,
-  'tree-large': 4
-};
-
 // Moving piece from inventory to board
   if (piecesInInventory[pieceId] && targetLocation === 'board') {
     const pieceType = piecesInInventory[pieceId].type;

@@ -7,6 +7,7 @@ import seedImage from './images/seed.png'
 import treeSmallImage from './images/tree-small.png'
 import treeMediumImage from './images/tree-medium.png'
 import treeLargeImage from './images/tree-large.png'
+import { pieceValues } from './pieceValues'
 
 const pieceStyle = {
   fontSize: 40,
@@ -22,9 +23,11 @@ const pieceImages = {
   'tree-large': treeLargeImage
 }
 
-export const Piece = ({ type, id, fillContainer = false }) => {
+export const Piece = ({ type, id, sunPoints, fillContainer = false }) => {
+  const pieceValue = pieceValues[type] || 0;
   const [{ isDragging }, drag, preview] = useDrag({
     item: { type: ItemTypes.PIECE, id },
+    canDrag: pieceValue <= sunPoints,
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),

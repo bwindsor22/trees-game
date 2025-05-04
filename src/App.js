@@ -7,7 +7,7 @@ import { GameProvider, useGameState } from './view/board/GameContext';
 import { Container, Row, Col } from 'react-bootstrap';
 
 const GameContent = () => {
-  const { boardState, piecesInInventory } = useGameState();
+  const { boardState, piecesInInventory, sunPoints } = useGameState();
   
   return (
     <Container>
@@ -16,7 +16,7 @@ const GameContent = () => {
           <Board boardState={boardState} />
         </Col>
         <Col md={4}>
-          <Inventory piecesInInventory={piecesInInventory} />
+          <Inventory piecesInInventory={piecesInInventory} sunPoints={sunPoints} />
         </Col>
       </Row>
     </Container>

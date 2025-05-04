@@ -8,7 +8,7 @@ import Overlay from "../board/Overlay"
 import { Piece } from "../board/Piece"
 
 export default (props) => {
-    const { val, width, inventoryPosition, inventoryPiece } = props
+    const { val, width, inventoryPosition, inventoryPiece, sunPoints } = props
     
     const [{ isOver, canDrop }, drop] = useDrop({
         accept: ItemTypes.PIECE,
@@ -41,7 +41,7 @@ export default (props) => {
                     justifyContent: 'center',
                     alignItems: 'center'
                 }}>
-                    <Piece type={inventoryPiece.type} id={props.pieceId} fillContainer={true} />
+                    <Piece type={inventoryPiece.type} id={props.pieceId} fillContainer={true} sunPoints={sunPoints} />
                 </div>
             )}
             {isOver && <Overlay color={canDrop ? "green" : "red"} />}

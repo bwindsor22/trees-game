@@ -30,7 +30,7 @@ const row4 = [
     {val: 5, width: largeWidth, type: 'tree-large'},
 ]
 
-export default ({ piecesInInventory }) => {
+export default ({ piecesInInventory, sunPoints }) => {
     // Find piece for a specific inventory position
     const getPieceForPosition = (position) => {
         for (const pieceId in piecesInInventory) {
@@ -59,6 +59,7 @@ export default ({ piecesInInventory }) => {
                         inventoryPosition={currentIndex}
                         inventoryPiece={piece}
                         pieceId={piece ? piece.id : null}
+                        sunPoints={sunPoints}
                     />
                 </Col>
             })}
@@ -74,6 +75,7 @@ export default ({ piecesInInventory }) => {
                         inventoryPosition={currentIndex}
                         inventoryPiece={piece}
                         pieceId={piece ? piece.id : null}
+                        sunPoints={sunPoints}
                     />
                 </Col>
             })}
@@ -89,6 +91,7 @@ export default ({ piecesInInventory }) => {
                         inventoryPosition={currentIndex}
                         inventoryPiece={piece}
                         pieceId={piece ? piece.id : null}
+                        sunPoints={sunPoints}
                     />
                 </Col>
             })}
@@ -104,11 +107,14 @@ export default ({ piecesInInventory }) => {
                         inventoryPosition={currentIndex}
                         inventoryPiece={piece}
                         pieceId={piece ? piece.id : null}
+                        sunPoints={sunPoints}
+
                     />
                 </Col>
             })}
         </Row>
         <Row>Inventory::</Row>
         <Row>{JSON.stringify(piecesInInventory)}</Row>
+        <Row>Sun Points: {sunPoints}</Row>
     </Container>
 }
