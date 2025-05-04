@@ -12,7 +12,7 @@ export default (props) => {
     
     const [{ isOver, canDrop }, drop] = useDrop({
         accept: ItemTypes.PIECE,
-        canDrop: (item) => canMovePiece(item.id, inventoryPosition, 0, 'inventory'),
+        canDrop: (item) => canMovePiece(item.id, inventoryPosition, 0, 'inventory', sunPoints),
         drop: (item) => movePiece(item.id, inventoryPosition, 0, 'inventory'),
         collect: (monitor) => ({
             isOver: !!monitor.isOver(),
@@ -41,7 +41,7 @@ export default (props) => {
                     justifyContent: 'center',
                     alignItems: 'center'
                 }}>
-                    <Piece type={inventoryPiece.type} id={props.pieceId} fillContainer={true} sunPoints={sunPoints} />
+                    <Piece type={inventoryPiece.type} id={props.pieceId} fillContainer={true} sunPoints={sunPoints} isFromInventory={true} />
                 </div>
             )}
             {isOver && <Overlay color={canDrop ? "green" : "red"} />}

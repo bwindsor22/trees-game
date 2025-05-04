@@ -1,4 +1,3 @@
-
 import { pieceValues } from './pieceValues';
 
 let boardState = {};
@@ -24,12 +23,27 @@ export function observe(o) {
   };
 }
 
-export function canMovePiece(pieceId, toX, toY, targetLocation) {
+export function canMovePiece(pieceId, toX, toY, targetLocation, sunPoints) {
   if (targetLocation === 'board') {
     // Only allow moves from inventory or available to board
     const isFromInventory = pieceId in piecesInInventory;
     const isFromAvailable = pieceId in piecesAvailable;
     if (!isFromInventory && !isFromAvailable) return false;
+    
+    // Get the piece type and calculate the cost
+    let pieceType;
+    if (isFromInventory) {
+      pieceType = piecesInInventory[pieceId].type;
+    } else {
+      pieceType = piecesAvailable[pieceId].type;
+    }
+    
+    const movementCost = movementCosts[pieceType] || 0;
+    const inventoryCost = isFromInventory ? (pieceValues[pieceType] || 0) : 0;
+    const totalCost = movementCost + inventoryCost;
+    
+    // Check if there are enough sun points
+    if (totalCost > sunPoints) return false;
     
     const boardKey = `${toX},${toY}`;
     return boardState[boardKey] === undefined;
@@ -39,7 +53,14 @@ export function canMovePiece(pieceId, toX, toY, targetLocation) {
     // Only allow moves from inventory to available
     const isFromInventory = pieceId in piecesInInventory;
     const isFromBoard = Object.values(boardState).some(piece => piece.id === pieceId);
-    return isFromInventory && !isFromBoard;
+    if (!isFromInventory || isFromBoard) return false;
+    
+    // Check if there are enough sun points for the piece value
+    const pieceType = piecesInInventory[pieceId].type;
+    const pieceValue = pieceValues[pieceType] || 0;
+    if (pieceValue > sunPoints) return false;
+    
+    return true;
   }
   
   if (targetLocation === 'inventory') {
@@ -68,9 +89,9 @@ export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
     
     if (pieceType) {
       const boardKey = `${toX},${toY}`;
-      const inventoryCost = fromLocation === 'inventory' ? (pieceValues[pieceType] || 0) : 0;
       const movementCost = movementCosts[pieceType] || 0;
-      const totalCost = inventoryCost + movementCost;
+      const inventoryCost = fromLocation === 'inventory' ? (pieceValues[pieceType] || 0) : 0;
+      const totalCost = movementCost + inventoryCost;
       
       boardState = {
         ...boardState,

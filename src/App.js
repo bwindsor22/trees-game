@@ -20,7 +20,7 @@ const GameContent = () => {
         </Col>
         <Col md={4}>
           <h2 className="mt-4">Available Pieces</h2>
-          <Available piecesAvailable={piecesAvailable} />
+          <Available piecesAvailable={piecesAvailable} sunPoints={sunPoints} />
           <h2>Store</h2>
           <Inventory
             piecesInInventory={piecesInInventory}

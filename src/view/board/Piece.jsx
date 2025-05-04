@@ -23,11 +23,17 @@ const pieceImages = {
   'tree-large': treeLargeImage
 }
 
-export const Piece = ({ type, id, sunPoints, fillContainer = false }) => {
-  const pieceValue = pieceValues[type] || 0;
+const movementCosts = {
+  'seed': 0,
+  'tree-small': 1,
+  'tree-medium': 2,
+  'tree-large': 3
+}
+
+export const Piece = ({ type, id, fillContainer = false, isFromInventory = false }) => {
+  
   const [{ isDragging }, drag, preview] = useDrag({
     item: { type: ItemTypes.PIECE, id },
-    canDrag: sunPoints === undefined || pieceValue <= sunPoints,
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),

@@ -4,11 +4,14 @@ import { Square } from './Square'
 import { canMovePiece, movePiece } from './Game'
 import ItemTypes from './ItemTypes'
 import Overlay from './Overlay'
+import { useGameState } from './GameContext'
 
 export const BoardSquare = ({ x, y, bkgd, children }) => {
+  const { sunPoints } = useGameState();
+  
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ItemTypes.PIECE,
-    canDrop: (item) => canMovePiece(item.id, x, y, 'board'),
+    canDrop: (item) => canMovePiece(item.id, x, y, 'board', sunPoints),
     drop: (item) => movePiece(item.id, x, y, 'board'),
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
