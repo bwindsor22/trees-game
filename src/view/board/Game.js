@@ -68,7 +68,9 @@ export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
     
     if (pieceType) {
       const boardKey = `${toX},${toY}`;
-      const pieceValue = pieceValues[pieceType] || 0;
+      const inventoryCost = fromLocation === 'inventory' ? (pieceValues[pieceType] || 0) : 0;
+      const movementCost = movementCosts[pieceType] || 0;
+      const totalCost = inventoryCost + movementCost;
       
       boardState = {
         ...boardState,
@@ -79,12 +81,13 @@ export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
         const newInventory = { ...piecesInInventory };
         delete newInventory[pieceId];
         piecesInInventory = newInventory;
-        emitChange({ sunPointsChange: -pieceValue });
       } else {
         const newAvailable = { ...piecesAvailable };
         delete newAvailable[pieceId];
         piecesAvailable = newAvailable;
       }
+      
+      emitChange({ sunPointsChange: -totalCost });
     }
   } 
   else if (targetLocation === 'available') {
@@ -117,8 +120,23 @@ export function getBoardState() {
 }
 
 // Initialize inventory
+const movementCosts = {
+  'seed': 0,
+  'tree-small': 1,
+  'tree-medium': 2,
+  'tree-large': 3
+};
+
 function initializeInventory() {
   let id = 0;
+  
+  // Initialize available pieces first
+  piecesAvailable = {
+    [id++]: { type: 'seed', position: 0 },
+    [id++]: { type: 'seed', position: 1 },
+    [id++]: { type: 'tree-small', position: 2 },
+    [id++]: { type: 'tree-small', position: 3 }
+  };
   
   // Add seeds (Row 1)
   for (let i = 0; i < 4; i++) {
