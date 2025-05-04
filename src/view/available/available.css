@@ -1,0 +1,30 @@
+
+.available-container {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.available-slot {
+  aspect-ratio: 1;
+  background: #fff;
+  border: 2px dashed #ccc;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.available-slot.can-drop {
+  border-color: #4CAF50;
+  background: #E8F5E9;
+}
+
+.available-slot.no-drop {
+  border-color: #f44336;
+  background: #FFEBEE;
+}
