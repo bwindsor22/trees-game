@@ -7,9 +7,9 @@ import { canMovePiece, movePiece } from "../board/Game"
 import Overlay from "../board/Overlay"
 import { Piece } from "../board/Piece"
 
-export default (props) => {
+const Blank = (props) => {
     const { val, width, inventoryPosition, inventoryPiece, sunPoints } = props
-    
+
     const [{ isOver, canDrop }, drop] = useDrop({
         accept: ItemTypes.PIECE,
         canDrop: (item) => canMovePiece(item.id, inventoryPosition, 0, 'inventory', sunPoints),
@@ -19,32 +19,22 @@ export default (props) => {
             canDrop: !!monitor.canDrop(),
         }),
     })
-    
+
     return (
-        <div 
-            ref={drop}
-            style={{
-                height: width + 25 + 'px',
-                position: 'relative'
-            }}
-        >
-            <div className="circle">{val}</div>
-            <img src={blank} style={{width: width + 'px', position: "absolute", marginTop: '-15px'}}/>
-            {inventoryPiece && (
-                <div style={{
-                    position: 'absolute', 
-                    top: '10px', 
-                    left: '0',
-                    width: width + 'px',
-                    height: width + 'px',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center'
-                }}>
-                    <Piece type={inventoryPiece.type} id={props.pieceId} fillContainer={true} sunPoints={sunPoints} isFromInventory={true} />
-                </div>
-            )}
+        <div ref={drop} style={{ position: 'relative', paddingTop: '14px', paddingLeft: '14px', display: 'inline-block' }}>
+            {/* Slot area */}
+            <div style={{ position: 'relative', width: width + 'px', height: width + 'px' }}>
+                <img src={blank} alt="" style={{ width: '100%' }} />
+                {inventoryPiece && (
+                    <div style={{ position: 'absolute', inset: 0 }}>
+                        <Piece type={inventoryPiece.type} id={props.pieceId} fillContainer={true} sunPoints={sunPoints} isFromInventory={true} />
+                    </div>
+                )}
+            </div>
+            {/* Price badge — top-left corner, above and slightly left of the slot */}
+            <div className="circle" style={{ position: 'absolute', top: 0, left: 0 }}>{val}</div>
             {isOver && <Overlay color={canDrop ? "green" : "red"} />}
         </div>
     )
 }
+export default Blank

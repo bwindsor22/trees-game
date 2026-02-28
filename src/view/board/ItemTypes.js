@@ -1,3 +1,4 @@
-export default {
+const ItemTypes = {
   PIECE: 'piece',
-}
+};
+export default ItemTypes;

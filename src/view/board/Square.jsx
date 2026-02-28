@@ -17,7 +17,7 @@ export const Square = ({ black, bkgd, children }) => {
     >
         <div>
             {children}
-            <img src={bkgd} style={{width: '100%', zIndex: 1}}/>
+            <img src={bkgd} alt="" style={{width: '100%', zIndex: 1}}/>
         </div>
     </div>
   )

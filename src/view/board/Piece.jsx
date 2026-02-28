@@ -7,8 +7,6 @@ import seedImage from './images/seed.png'
 import treeSmallImage from './images/tree-small.png'
 import treeMediumImage from './images/tree-medium.png'
 import treeLargeImage from './images/tree-large.png'
-import { pieceValues } from './pieceValues'
-
 const pieceStyle = {
   fontSize: 40,
   fontWeight: 'bold',
@@ -21,13 +19,6 @@ const pieceImages = {
   'tree-small': treeSmallImage,
   'tree-medium': treeMediumImage,
   'tree-large': treeLargeImage
-}
-
-const movementCosts = {
-  'seed': 0,
-  'tree-small': 1,
-  'tree-medium': 2,
-  'tree-large': 3
 }
 
 export const Piece = ({ type, id, fillContainer = false, isFromInventory = false }) => {
@@ -47,11 +38,13 @@ export const Piece = ({ type, id, fillContainer = false, isFromInventory = false
     height: '100%',
     objectFit: 'contain',
     zIndex: 2,
-    position: 'absolute'
+    position: 'absolute',
+    borderRadius: '50%',
   } : {
     width: '100%',
     zIndex: 2,
-    position: 'absolute'
+    position: 'absolute',
+    borderRadius: '50%',
   };
 
   return (
