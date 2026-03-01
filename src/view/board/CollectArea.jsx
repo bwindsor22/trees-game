@@ -8,11 +8,11 @@ import { useGameState } from './GameContext';
 const RING_LABELS = ['🍃🍃🍃🍃', '🍃🍃🍃', '🍃🍃', '🍃'];
 
 const CollectArea = () => {
-  const { lp, scorePiles } = useGameState();
+  const { lp, scorePiles, aiThinking } = useGameState();
 
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ItemTypes.PIECE,
-    canDrop: (item) => canMovePiece(item.id, 0, 0, 'inventory', lp),
+    canDrop: (item) => !aiThinking && canMovePiece(item.id, 0, 0, 'inventory', lp),
     drop: (item) => movePiece(item.id, 0, 0, 'inventory'),
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),

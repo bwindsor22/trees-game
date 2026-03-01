@@ -5,22 +5,24 @@ import { Piece } from '../board/Piece';
 import { canMovePiece, movePiece } from '../board/Game';
 import './available.css';
 
-const Available = ({ piecesAvailable, sunPoints }) => {
+const Available = ({ piecesAvailable, lp, owner = 'p1', disabled = false }) => {
   const slots = Array(8).fill(null);
-  
+
   return (
     <div className="available-container">
       {slots.map((_, index) => {
         const piece = Object.entries(piecesAvailable || {}).find(
           ([_, p]) => p.position === index
         );
-        
+
         return (
-          <AvailableSlot 
-            key={index} 
+          <AvailableSlot
+            key={index}
             position={index}
             piece={piece ? { ...piece[1], id: piece[0] } : null}
-            sunPoints={sunPoints}
+            lp={lp}
+            owner={owner}
+            disabled={disabled}
           />
         );
       })}
@@ -28,10 +30,10 @@ const Available = ({ piecesAvailable, sunPoints }) => {
   );
 };
 
-const AvailableSlot = ({ position, piece, sunPoints }) => {
+const AvailableSlot = ({ position, piece, lp, owner = 'p1', disabled = false }) => {
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ItemTypes.PIECE,
-    canDrop: (item) => canMovePiece(item.id, position, 0, 'available', sunPoints),
+    canDrop: (item) => !disabled && canMovePiece(item.id, position, 0, 'available', lp),
     drop: (item) => movePiece(item.id, position, 0, 'available'),
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
@@ -40,11 +42,11 @@ const AvailableSlot = ({ position, piece, sunPoints }) => {
   });
 
   return (
-    <div 
+    <div
       ref={drop}
       className={`available-slot ${isOver ? (canDrop ? 'can-drop' : 'no-drop') : ''}`}
     >
-      {piece && <Piece type={piece.type} id={piece.id} fillContainer={true} sunPoints={sunPoints} isFromInventory={false} />}
+      {piece && <Piece type={piece.type} id={piece.id} fillContainer={true} lp={lp} isFromInventory={false} owner={owner} disabled={disabled} />}
     </div>
   );
 };

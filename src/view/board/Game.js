@@ -1,20 +1,23 @@
+// Two-player game state
 let boardState = {};
-let piecesInInventory = {};
-let piecesAvailable = {};
-let setupTreesPlaced = 0;
+let inventories = { p1: {}, p2: {} };
+let available = { p1: {}, p2: {} };
+let setupPlaced = { p1: 0, p2: 0 };
 const SETUP_TREES_NEEDED = 2;
+
+// The player whose pieces are currently being interacted with
+let currentPlayer = 'p1';
 
 // Tracks every board square acted upon this turn (planting, growing, or harvesting).
 // No space can be acted upon twice in one turn.
 let activatedSquaresThisTurn = new Set();
 
 // Scoring token piles indexed by ring (0=center 4-leaf, 3=outer 1-leaf).
-// Fallback: if the ring's pile is empty, take from the next pile (ring+1, less valuable).
 const SCORE_PILES_INIT = [
-  [22, 21, 20],                            // ring 0 (center): 4-leaf tokens
-  [19, 18, 18, 17, 17],                    // ring 1: 3-leaf tokens
-  [16, 16, 14, 14, 13, 13],               // ring 2: 2-leaf tokens
-  [14, 14, 13, 13, 13, 12, 12, 12, 12],   // ring 3 (outer): 1-leaf tokens
+  [22, 21, 20],
+  [19, 18, 18, 17, 17],
+  [16, 16, 14, 14, 13, 13],
+  [14, 14, 13, 13, 13, 12, 12, 12, 12],
 ];
 let scorePiles = SCORE_PILES_INIT.map(p => [...p]);
 
@@ -23,31 +26,45 @@ let observers = [];
 function emitChange(options = {}) {
   const fullOptions = {
     ...options,
-    setupTreesPlaced,
+    setupPlaced: { ...setupPlaced },
     scorePiles: scorePiles.map(p => [...p]),
+    currentPlayer,
   };
   observers.forEach((o) => o && o(
     { ...boardState },
-    { ...piecesInInventory },
-    { ...piecesAvailable },
+    { p1: { ...inventories.p1 }, p2: { ...inventories.p2 } },
+    { p1: { ...available.p1 }, p2: { ...available.p2 } },
     fullOptions
   ));
 }
 
 export function observe(o) {
   observers.push(o);
-  o({ ...boardState }, { ...piecesInInventory }, { ...piecesAvailable }, {
-    setupTreesPlaced,
-    scorePiles: scorePiles.map(p => [...p]),
-  });
+  o(
+    { ...boardState },
+    { p1: { ...inventories.p1 }, p2: { ...inventories.p2 } },
+    { p1: { ...available.p1 }, p2: { ...available.p2 } },
+    {
+      setupPlaced: { ...setupPlaced },
+      scorePiles: scorePiles.map(p => [...p]),
+      currentPlayer,
+    }
+  );
   return () => {
     observers = observers.filter((t) => t !== o);
   };
 }
 
-// Call this when the sun advances to a new turn.
 export function clearTurnActions() {
   activatedSquaresThisTurn = new Set();
+}
+
+export function setCurrentPlayer(player) {
+  currentPlayer = player;
+}
+
+export function getCurrentPlayer() {
+  return currentPlayer;
 }
 
 // Hex distance in doubled coordinate system
@@ -76,8 +93,6 @@ const movementCosts = {
 };
 
 // Inventory slot layout.
-// Positions 0-3: seeds, 4-7: small trees, 8-10: medium trees, 11-12: large trees.
-// Within each row, rightmost slot (highest position) = most expensive (topmost available space).
 const INVENTORY_SLOT_COSTS = [1, 1, 1, 1,  2, 2, 3, 3,  3, 3, 4,  4, 5];
 
 const INVENTORY_SLOT_RANGES = {
@@ -91,11 +106,10 @@ function getSlotCost(position) {
   return INVENTORY_SLOT_COSTS[position] || 0;
 }
 
-// Returns the rightmost (highest-cost) empty slot for the given piece type.
-function findOpenSlotForType(type) {
+function findOpenSlotForType(type, player) {
   const range = INVENTORY_SLOT_RANGES[type];
   if (!range) return null;
-  const usedPositions = new Set(Object.values(piecesInInventory).map(p => p.position));
+  const usedPositions = new Set(Object.values(inventories[player]).map(p => p.position));
   for (let pos = range.end; pos >= range.start; pos--) {
     if (!usedPositions.has(pos)) return pos;
   }
@@ -103,22 +117,27 @@ function findOpenSlotForType(type) {
 }
 
 export function canMovePiece(pieceId, toX, toY, targetLocation, lp) {
+  const inv = inventories[currentPlayer];
+  const avail = available[currentPlayer];
+  const setupDone = setupPlaced.p1 >= SETUP_TREES_NEEDED && setupPlaced.p2 >= SETUP_TREES_NEEDED;
+
   if (targetLocation === 'board') {
-    const isFromInventory = pieceId in piecesInInventory;
-    const isFromAvailable = pieceId in piecesAvailable;
+    const isFromInventory = pieceId in inv;
+    const isFromAvailable = pieceId in avail;
     if (!isFromInventory && !isFromAvailable) return false;
 
     let pieceType;
-    if (isFromInventory) pieceType = piecesInInventory[pieceId].type;
-    else pieceType = piecesAvailable[pieceId].type;
+    if (isFromInventory) pieceType = inv[pieceId].type;
+    else pieceType = avail[pieceId].type;
 
     const movementCost = movementCosts[pieceType] || 0;
-    const buyCost = isFromInventory ? getSlotCost(piecesInInventory[pieceId].position) : 0;
+    const buyCost = isFromInventory ? getSlotCost(inv[pieceId].position) : 0;
     const totalCost = movementCost + buyCost;
     if (totalCost > lp) return false;
 
-    // Setup phase: only available pieces, only small trees, only outer ring
-    if (setupTreesPlaced < SETUP_TREES_NEEDED) {
+    // Setup phase: only available small trees on outer ring
+    if (!setupDone) {
+      if (setupPlaced[currentPlayer] >= SETUP_TREES_NEEDED) return false;
       if (!isFromAvailable) return false;
       if (pieceType !== 'tree-small') return false;
       if (hexDistance(toX, toY, 0, 0) !== 3) return false;
@@ -126,14 +145,13 @@ export function canMovePiece(pieceId, toX, toY, targetLocation, lp) {
     }
 
     const boardKey = `${toX},${toY}`;
-
-    // Can't act on a space already activated this turn (planted, grown, or harvested)
     if (activatedSquaresThisTurn.has(boardKey)) return false;
 
-    // Seed placement: must be within range of at least one tree that was not placed this turn
+    // Seeds: must be within range of own tree not placed this turn
     if (pieceType === 'seed') {
       const canReach = Object.entries(boardState).some(([key, piece]) => {
-        if (activatedSquaresThisTurn.has(key)) return false; // just placed, can't spread yet
+        if (piece.owner !== currentPlayer) return false;
+        if (activatedSquaresThisTurn.has(key)) return false;
         const range = treeRanges[piece.type];
         if (!range) return false;
         const [tx, ty] = key.split(',').map(Number);
@@ -143,38 +161,31 @@ export function canMovePiece(pieceId, toX, toY, targetLocation, lp) {
     }
 
     if (boardState[boardKey] === undefined) {
-      // After setup: only seeds on empty squares (small trees must grow from seeds)
       return pieceType === 'seed';
     }
 
-    // Occupied square: only valid if growing (placing the next size up)
+    // Can only grow your own pieces
+    if (boardState[boardKey].owner !== currentPlayer) return false;
     return growthChain[boardState[boardKey].type] === pieceType;
   }
 
   if (targetLocation === 'available') {
-    // Buying from store is not allowed during setup
-    if (setupTreesPlaced < SETUP_TREES_NEEDED) return false;
-
-    const isFromInventory = pieceId in piecesInInventory;
-    const isFromBoard = Object.values(boardState).some(piece => piece.id === pieceId);
-    if (!isFromInventory || isFromBoard) return false;
-
-    const cost = getSlotCost(piecesInInventory[pieceId].position);
+    if (!setupDone) return false;
+    const isFromInventory = pieceId in inv;
+    if (!isFromInventory) return false;
+    const cost = getSlotCost(inv[pieceId].position);
     if (cost > lp) return false;
-
     return true;
   }
 
   if (targetLocation === 'inventory') {
-    // Allow harvesting large trees from the board (costs 4 LP)
     const boardEntry = Object.entries(boardState).find(([, piece]) => piece.id === pieceId);
     if (!boardEntry) return false;
     const piece = boardEntry[1];
     if (piece.type !== 'tree-large') return false;
-
+    if (piece.owner !== currentPlayer) return false;
     const boardKey = boardEntry[0];
     if (activatedSquaresThisTurn.has(boardKey)) return false;
-
     return 4 <= lp;
   }
 
@@ -182,73 +193,81 @@ export function canMovePiece(pieceId, toX, toY, targetLocation, lp) {
 }
 
 export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
+  const inv = inventories[currentPlayer];
+  const avail = available[currentPlayer];
+
   if (targetLocation === 'board') {
     let pieceType;
     let fromLocation;
 
-    if (piecesInInventory[pieceId]) {
-      pieceType = piecesInInventory[pieceId].type;
+    if (inv[pieceId]) {
+      pieceType = inv[pieceId].type;
       fromLocation = 'inventory';
-    } else if (piecesAvailable[pieceId]) {
-      pieceType = piecesAvailable[pieceId].type;
+    } else if (avail[pieceId]) {
+      pieceType = avail[pieceId].type;
       fromLocation = 'available';
     }
 
     if (pieceType) {
       const boardKey = `${toX},${toY}`;
       const movementCost = movementCosts[pieceType] || 0;
-      const buyCost = fromLocation === 'inventory' ? getSlotCost(piecesInInventory[pieceId].position) : 0;
+      const buyCost = fromLocation === 'inventory' ? getSlotCost(inv[pieceId].position) : 0;
       const totalCost = movementCost + buyCost;
 
-      // Growing: return displaced piece to rightmost open slot for its type
+      // Growing: displaced piece returns to current player's inventory
       const existingPiece = boardState[boardKey];
       if (existingPiece) {
-        const openPos = findOpenSlotForType(existingPiece.type);
+        const openPos = findOpenSlotForType(existingPiece.type, currentPlayer);
         if (openPos !== null) {
-          piecesInInventory = {
-            ...piecesInInventory,
-            [existingPiece.id]: { type: existingPiece.type, position: openPos },
+          inventories = {
+            ...inventories,
+            [currentPlayer]: {
+              ...inventories[currentPlayer],
+              [existingPiece.id]: { type: existingPiece.type, position: openPos },
+            },
           };
         }
       }
 
-      // Activate this square — no further actions on it this turn
       activatedSquaresThisTurn = new Set([...activatedSquaresThisTurn, boardKey]);
 
       boardState = {
         ...boardState,
-        [boardKey]: { type: pieceType, id: pieceId },
+        [boardKey]: { type: pieceType, id: pieceId, owner: currentPlayer },
       };
 
       if (fromLocation === 'inventory') {
-        const newInventory = { ...piecesInInventory };
-        delete newInventory[pieceId];
-        piecesInInventory = newInventory;
+        const newInv = { ...inventories[currentPlayer] };
+        delete newInv[pieceId];
+        inventories = { ...inventories, [currentPlayer]: newInv };
       } else {
-        const newAvailable = { ...piecesAvailable };
-        delete newAvailable[pieceId];
-        piecesAvailable = newAvailable;
+        const newAvail = { ...available[currentPlayer] };
+        delete newAvail[pieceId];
+        available = { ...available, [currentPlayer]: newAvail };
       }
 
-      if (setupTreesPlaced < SETUP_TREES_NEEDED && pieceType === 'tree-small') {
-        setupTreesPlaced++;
+      if (setupPlaced[currentPlayer] < SETUP_TREES_NEEDED && pieceType === 'tree-small') {
+        setupPlaced = { ...setupPlaced, [currentPlayer]: setupPlaced[currentPlayer] + 1 };
       }
 
       emitChange({ lpChange: -totalCost });
     }
   } else if (targetLocation === 'available') {
-    if (piecesInInventory[pieceId]) {
-      const pieceType = piecesInInventory[pieceId].type;
-      const cost = getSlotCost(piecesInInventory[pieceId].position);
+    if (inv[pieceId]) {
+      const pieceType = inv[pieceId].type;
+      const cost = getSlotCost(inv[pieceId].position);
 
-      piecesAvailable = {
-        ...piecesAvailable,
-        [pieceId]: { type: pieceType, position: toX },
+      available = {
+        ...available,
+        [currentPlayer]: {
+          ...available[currentPlayer],
+          [pieceId]: { type: pieceType, position: toX },
+        },
       };
 
-      const newInventory = { ...piecesInInventory };
-      delete newInventory[pieceId];
-      piecesInInventory = newInventory;
+      const newInv = { ...inventories[currentPlayer] };
+      delete newInv[pieceId];
+      inventories = { ...inventories, [currentPlayer]: newInv };
 
       emitChange({ lpChange: -cost });
     }
@@ -257,9 +276,8 @@ export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
     const boardKey = Object.keys(boardState).find(key => boardState[key].id === pieceId);
     if (boardKey) {
       const [bx, by] = boardKey.split(',').map(Number);
-      const ring = hexDistance(bx, by, 0, 0); // 0=center, 3=outer
+      const ring = hexDistance(bx, by, 0, 0);
 
-      // Take from the matching ring's pile; fall back to next (less valuable) pile if empty
       let scoreValue = 0;
       for (let r = ring; r <= 3; r++) {
         if (scorePiles[r].length > 0) {
@@ -273,17 +291,18 @@ export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
       delete newBoardState[boardKey];
       boardState = newBoardState;
 
-      const openPos = findOpenSlotForType(pieceType);
+      const openPos = findOpenSlotForType(pieceType, currentPlayer);
       if (openPos !== null) {
-        piecesInInventory = {
-          ...piecesInInventory,
-          [pieceId]: { type: pieceType, position: openPos },
+        inventories = {
+          ...inventories,
+          [currentPlayer]: {
+            ...inventories[currentPlayer],
+            [pieceId]: { type: pieceType, position: openPos },
+          },
         };
       }
 
-      // Activate the now-empty square
       activatedSquaresThisTurn = new Set([...activatedSquaresThisTurn, boardKey]);
-
       emitChange({ lpChange: -4, scoreChange: scoreValue });
     }
   }
@@ -291,41 +310,47 @@ export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
   emitChange();
 }
 
-// Returns a human-readable explanation of why a board placement is invalid,
-// or null if the move is valid. Used to show tooltips during drag.
 export function getDropHint(pieceId, toX, toY, lp) {
-  const isFromInventory = pieceId in piecesInInventory;
-  const isFromAvailable = pieceId in piecesAvailable;
+  const inv = inventories[currentPlayer];
+  const avail = available[currentPlayer];
+  const isFromInventory = pieceId in inv;
+  const isFromAvailable = pieceId in avail;
+  const setupDone = setupPlaced.p1 >= SETUP_TREES_NEEDED && setupPlaced.p2 >= SETUP_TREES_NEEDED;
 
   if (!isFromInventory && !isFromAvailable) {
     const boardEntry = Object.entries(boardState).find(([, piece]) => piece.id === pieceId);
-    if (boardEntry && boardEntry[1].type === 'tree-large') {
-      return "Drag large trees to the harvest area on the left to collect them.";
+    if (boardEntry) {
+      if (boardEntry[1].type === 'tree-large' && boardEntry[1].owner === currentPlayer) {
+        return "Drag large trees to the harvest area on the left to collect them.";
+      }
+      if (boardEntry[1].owner !== currentPlayer) {
+        return "You cannot move the opponent's pieces.";
+      }
     }
     return "Trees cannot be moved once placed.";
   }
 
   let pieceType;
-  if (isFromInventory) pieceType = piecesInInventory[pieceId].type;
-  else pieceType = piecesAvailable[pieceId].type;
+  if (isFromInventory) pieceType = inv[pieceId].type;
+  else pieceType = avail[pieceId].type;
 
   const movementCost = movementCosts[pieceType] || 0;
-  const buyCost = isFromInventory ? getSlotCost(piecesInInventory[pieceId].position) : 0;
+  const buyCost = isFromInventory ? getSlotCost(inv[pieceId].position) : 0;
   const totalCost = movementCost + buyCost;
   if (totalCost > lp) return `Need ${totalCost} light points (you have ${lp}).`;
 
-  if (setupTreesPlaced < SETUP_TREES_NEEDED) {
+  if (!setupDone) {
     if (!isFromAvailable) return "During setup, use only your available pieces (not the store).";
     if (pieceType !== 'tree-small') return "During setup, only small trees can be placed.";
     if (hexDistance(toX, toY, 0, 0) !== 3) return "During setup, place trees on the outer ring only.";
   }
 
   const boardKey = `${toX},${toY}`;
-
   if (activatedSquaresThisTurn.has(boardKey)) return "This space was already used this turn.";
 
   if (pieceType === 'seed' && boardState[boardKey] === undefined) {
     const eligibleTreeReaches = Object.entries(boardState).some(([key, piece]) => {
+      if (piece.owner !== currentPlayer) return false;
       if (activatedSquaresThisTurn.has(key)) return false;
       const range = treeRanges[piece.type];
       if (!range) return false;
@@ -333,23 +358,23 @@ export function getDropHint(pieceId, toX, toY, lp) {
       return hexDistance(tx, ty, toX, toY) <= range;
     });
     if (!eligibleTreeReaches) {
-      const anyTreeReaches = Object.entries(boardState).some(([key, piece]) => {
+      const anyOwnTreeReaches = Object.entries(boardState).some(([key, piece]) => {
+        if (piece.owner !== currentPlayer) return false;
         const range = treeRanges[piece.type];
         if (!range) return false;
         const [tx, ty] = key.split(',').map(Number);
         return hexDistance(tx, ty, toX, toY) <= range;
       });
-      return anyTreeReaches
+      return anyOwnTreeReaches
         ? "Trees placed this turn cannot spread seeds until next turn."
         : "Seeds must be planted within range of one of your trees.";
     }
   }
 
   if (boardState[boardKey] === undefined) {
-    if (pieceType !== 'seed') {
-      return "Trees must be grown from seeds. Plant a seed here first.";
-    }
+    if (pieceType !== 'seed') return "Trees must be grown from seeds. Plant a seed here first.";
   } else {
+    if (boardState[boardKey].owner !== currentPlayer) return "You cannot grow on the opponent's pieces.";
     if (growthChain[boardState[boardKey].type] !== pieceType) {
       const current = boardState[boardKey].type;
       const needed = growthChain[current];
@@ -365,36 +390,44 @@ export function getDropHint(pieceId, toX, toY, lp) {
 export function getBoardState() {
   return {
     boardState: { ...boardState },
-    piecesInInventory: { ...piecesInInventory },
-    piecesAvailable: { ...piecesAvailable },
+    inventories: { p1: { ...inventories.p1 }, p2: { ...inventories.p2 } },
+    available: { p1: { ...available.p1 }, p2: { ...available.p2 } },
+    setupPlaced: { ...setupPlaced },
+    scorePiles: scorePiles.map(p => [...p]),
+    currentPlayer,
+    activatedSquaresThisTurn: new Set(activatedSquaresThisTurn),
   };
 }
 
-function initializeInventory() {
-  let id = 0;
-
-  piecesAvailable = {
+function initPlayerInventory(player, startId) {
+  let id = startId;
+  available[player] = {
     [id++]: { type: 'seed', position: 0 },
     [id++]: { type: 'seed', position: 1 },
     [id++]: { type: 'tree-small', position: 2 },
     [id++]: { type: 'tree-small', position: 3 },
   };
-
-  for (let i = 0; i < 4; i++) { piecesInInventory[id] = { type: 'seed', position: i }; id++; }
-  for (let i = 0; i < 4; i++) { piecesInInventory[id] = { type: 'tree-small', position: i + 4 }; id++; }
-  for (let i = 0; i < 3; i++) { piecesInInventory[id] = { type: 'tree-medium', position: i + 8 }; id++; }
-  for (let i = 0; i < 2; i++) { piecesInInventory[id] = { type: 'tree-large', position: i + 11 }; id++; }
+  for (let i = 0; i < 4; i++) { inventories[player][id] = { type: 'seed', position: i }; id++; }
+  for (let i = 0; i < 4; i++) { inventories[player][id] = { type: 'tree-small', position: i + 4 }; id++; }
+  for (let i = 0; i < 3; i++) { inventories[player][id] = { type: 'tree-medium', position: i + 8 }; id++; }
+  for (let i = 0; i < 2; i++) { inventories[player][id] = { type: 'tree-large', position: i + 11 }; id++; }
+  return id;
 }
 
 export function resetGame() {
   boardState = {};
-  piecesInInventory = {};
-  piecesAvailable = {};
-  setupTreesPlaced = 0;
+  inventories = { p1: {}, p2: {} };
+  available = { p1: {}, p2: {} };
+  setupPlaced = { p1: 0, p2: 0 };
+  currentPlayer = 'p1';
   activatedSquaresThisTurn = new Set();
   scorePiles = SCORE_PILES_INIT.map(p => [...p]);
-  initializeInventory();
+  const next = initPlayerInventory('p1', 0);
+  initPlayerInventory('p2', next);
   emitChange();
 }
 
-initializeInventory();
+(function initializeGame() {
+  const next = initPlayerInventory('p1', 0);
+  initPlayerInventory('p2', next);
+})();
