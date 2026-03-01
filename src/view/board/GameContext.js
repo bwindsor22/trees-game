@@ -58,7 +58,16 @@ function calculatePhotosynthesisLP(boardState, lpShadows, owner) {
 
 const GameContext = createContext();
 
-export const GameProvider = ({ children }) => {
+// CSS filter strings for each player color choice
+export const COLOR_FILTERS = {
+  green:  'none',
+  blue:   'hue-rotate(150deg) saturate(1.4)',
+  purple: 'hue-rotate(240deg) saturate(1.2)',
+  orange: 'hue-rotate(30deg) saturate(2) brightness(1.1)',
+};
+
+export const GameProvider = ({ children, initialColor = 'green', initialDifficulty = 'medium' }) => {
+  const [playerColor] = useState(initialColor);
   const [boardState, setBoardState] = useState({});
   const [piecesInInventory, setPiecesInInventory] = useState({});
   const [piecesAvailable, setPiecesAvailable] = useState({});
@@ -75,11 +84,12 @@ export const GameProvider = ({ children }) => {
   const [lastLpGained, setLastLpGained] = useState(null);
   const [lastTurnScores, setLastTurnScores] = useState({});
   const [isSetupComplete, setIsSetupComplete] = useState(false);
+  const [p1SetupDone, setP1SetupDone] = useState(false);
   const [scorePiles, setScorePiles] = useState([[22,21,20],[19,18,18,17,17],[16,16,14,14,13,13],[14,14,13,13,13,12,12,12,12]]);
   const [isGameOver, setIsGameOver] = useState(false);
   const [currentPlayer, setCurrentPlayerState] = useState('p1');
   const [aiThinking, setAiThinking] = useState(false);
-  const [difficulty, setDifficulty] = useState('medium');
+  const [difficulty, setDifficulty] = useState(initialDifficulty);
 
   // Use refs to avoid stale closures in callbacks
   const lpRef = useRef(0);
@@ -117,6 +127,7 @@ export const GameProvider = ({ children }) => {
         }
       }
       if (options.setupPlaced !== undefined) {
+        setP1SetupDone(options.setupPlaced.p1 >= 2);
         const done = options.setupPlaced.p1 >= 2 && options.setupPlaced.p2 >= 2;
         setIsSetupComplete(done);
       }
@@ -133,30 +144,46 @@ export const GameProvider = ({ children }) => {
     setVisualShadowedSquares(computeVisualShadows(boardState, sunPosition));
   }, [boardState, sunPosition]);
 
-  // When P1 finishes setup (places 2 trees), trigger AI setup placement
+  // When P1 finishes setup (places 2 trees), trigger AI setup placement.
+  // Depends on p1SetupDone (not isSetupComplete) so it fires as soon as p1 is done,
+  // before p2 has placed — which is exactly when we need to trigger the AI.
   useEffect(() => {
+    if (!p1SetupDone || aiThinking) return;
     const live = getBoardState();
-    const p1Done = live.setupPlaced.p1 >= 2;
-    const p2Done = live.setupPlaced.p2 >= 2;
-    if (p1Done && !p2Done && !aiThinking) {
-      setAiThinking(true);
-      setTimeout(() => {
-        const positions = getAISetupPositions(live.boardState);
-        setCurrentPlayer('p2');
-        // Get AI's available small trees
-        const aiAvail = live.available.p2;
-        const smallTrees = Object.entries(aiAvail).filter(([, p]) => p.type === 'tree-small');
-        positions.forEach(([x, y], i) => {
-          if (smallTrees[i]) {
-            movePiece(smallTrees[i][0], x, y, 'board');
-          }
-        });
-        setCurrentPlayer('p1');
-        setCurrentPlayerState('p1');
-        setAiThinking(false);
-      }, 400);
-    }
-  }, [isSetupComplete, aiThinking]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (live.setupPlaced.p2 >= 2) return; // AI already placed
+    setAiThinking(true);
+    setTimeout(() => {
+      const positions = getAISetupPositions(live.boardState);
+      setCurrentPlayer('p2');
+      const aiAvail = live.available.p2;
+      const smallTrees = Object.entries(aiAvail).filter(([, p]) => p.type === 'tree-small');
+      positions.forEach(([x, y], i) => {
+        if (smallTrees[i]) {
+          movePiece(smallTrees[i][0], x, y, 'board');
+        }
+      });
+      setCurrentPlayer('p1');
+      setCurrentPlayerState('p1');
+
+      // Run initial photosynthesis at sun position 0 (rulebook: photosynthesis fires
+      // before the first lifecycle turn, giving players LP from their starting trees).
+      const liveAfter = getBoardState();
+      const lpShadows = computeLPShadows(liveAfter.boardState, 0);
+      const lpGainedP1 = calculatePhotosynthesisLP(liveAfter.boardState, lpShadows, 'p1');
+      const lpGainedP2 = calculatePhotosynthesisLP(liveAfter.boardState, lpShadows, 'p2');
+      const initialScores = {};
+      Object.entries(liveAfter.boardState).forEach(([key, piece]) => {
+        const earned = LP_PER_TREE[piece.type];
+        if (earned && !lpShadows.has(key)) initialScores[key] = earned;
+      });
+      setLp(prev => { const n = Math.min(20, prev + lpGainedP1); lpRef.current = n; return n; });
+      setLp2(prev => { const n = Math.min(20, prev + lpGainedP2); lp2Ref.current = n; return n; });
+      setLastLpGained(lpGainedP1);
+      setLastTurnScores(initialScores);
+
+      setAiThinking(false);
+    }, 400);
+  }, [p1SetupDone, aiThinking]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const advanceSunAndPhotosynthesis = useCallback((currentBoardState, currentSunPos, currentRevolutions) => {
     const newSunPos = (currentSunPos + 1) % 6;
@@ -194,7 +221,7 @@ export const GameProvider = ({ children }) => {
         { p1: scoreRef.current, p2: score2Ref.current },
         difficulty,
       );
-      setCurrentPlayer('p1');
+      setCurrentPlayerState('p1');
 
       // After AI moves, advance sun and run photosynthesis
       clearTurnActions();
@@ -218,6 +245,7 @@ export const GameProvider = ({ children }) => {
     setLastLpGained(null);
     setLastTurnScores({});
     setIsSetupComplete(false);
+    setP1SetupDone(false);
     setScorePiles([[22,21,20],[19,18,18,17,17],[16,16,14,14,13,13],[14,14,13,13,13,12,12,12,12]]);
     setIsGameOver(false);
     setCurrentPlayerState('p1');
@@ -251,6 +279,7 @@ export const GameProvider = ({ children }) => {
       aiThinking,
       difficulty,
       setDifficulty,
+      playerColor,
     }}>
       {children}
     </GameContext.Provider>

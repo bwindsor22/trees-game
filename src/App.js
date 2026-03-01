@@ -6,12 +6,21 @@ import Inventory from "./view/inventory/index";
 import Available from "./view/available/index";
 import CollectArea from "./view/board/CollectArea";
 import Tutorial from "./view/Tutorial";
-import { GameProvider, useGameState } from "./view/board/GameContext";
+import StartScreen from "./view/StartScreen";
+import { GameProvider, useGameState, COLOR_FILTERS } from "./view/board/GameContext";
 import { Container, Row, Col } from "react-bootstrap";
 
 const DIFFICULTY_LABELS = { easy: '🌱 Easy', medium: '🌳 Medium', hard: '🏆 Hard' };
 
-const GameContent = () => {
+// Color swatch shown next to the player label
+const COLOR_SWATCHES = {
+  green:  '#388e3c',
+  blue:   '#1565c0',
+  purple: '#6a1b9a',
+  orange: '#e65100',
+};
+
+const GameContent = ({ playerColor }) => {
   const {
     boardState,
     piecesInInventory,
@@ -40,6 +49,7 @@ const GameContent = () => {
   const isHumanTurn = currentPlayer === 'p1' && !aiThinking && isSetupComplete;
   const finalP1 = score + Math.floor(lp / 3);
   const finalP2 = score2 + Math.floor(lp2 / 3);
+  const swatch = COLOR_SWATCHES[playerColor] || COLOR_SWATCHES.green;
 
   return (
     <Container>
@@ -72,10 +82,10 @@ const GameContent = () => {
                 {finalP1 > finalP2 ? '🎉 You Win!' : finalP1 < finalP2 ? '🤖 AI Wins!' : '🤝 Tie!'}
               </div>
               <div style={{ fontSize: '13px', color: '#555', marginBottom: '2px' }}>
-                You: <strong>{score}</strong> pts + {Math.floor(lp / 3)} LP bonus = <strong>{finalP1}</strong>
+                You: <strong>{score}</strong> pts + {Math.floor(lp / 3)} light point bonus = <strong>{finalP1}</strong>
               </div>
               <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px' }}>
-                AI: <strong>{score2}</strong> pts + {Math.floor(lp2 / 3)} LP bonus = <strong>{finalP2}</strong>
+                AI: <strong>{score2}</strong> pts + {Math.floor(lp2 / 3)} light point bonus = <strong>{finalP2}</strong>
               </div>
               <button
                 onClick={resetGame}
@@ -153,7 +163,10 @@ const GameContent = () => {
               background: currentPlayer === 'p1' && !aiThinking ? '#e8f5e9' : 'transparent',
               border: currentPlayer === 'p1' && !aiThinking ? '1px solid #66bb6a' : '1px solid transparent',
             }}>
-              <span style={{ fontWeight: 'bold', fontSize: '14px' }}>🧑 You</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 'bold', fontSize: '14px' }}>
+                <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: swatch, display: 'inline-block' }} />
+                You
+              </span>
               <span style={{ fontSize: '14px' }}>
                 <strong>{lp}</strong> light points
                 {lastLpGained !== null && lastLpGained > 0 && (
@@ -176,7 +189,9 @@ const GameContent = () => {
               background: aiThinking ? '#e3f2fd' : 'transparent',
               border: aiThinking ? '1px solid #42a5f5' : '1px solid transparent',
             }}>
-              <span style={{ fontWeight: 'bold', fontSize: '14px', filter: 'hue-rotate(150deg)' }}>🤖 AI</span>
+              <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                <span style={{ filter: COLOR_FILTERS.blue, display: 'inline-block' }}>🤖</span> AI
+              </span>
               <span style={{ fontSize: '14px' }}>
                 <strong>{lp2}</strong> light points
               </span>
@@ -194,10 +209,16 @@ const GameContent = () => {
 };
 
 const App = () => {
+  const [gameConfig, setGameConfig] = useState(null);
+
+  if (!gameConfig) {
+    return <StartScreen onStart={setGameConfig} />;
+  }
+
   return (
     <DndProvider backend={HTML5Backend}>
-      <GameProvider>
-        <GameContent />
+      <GameProvider initialColor={gameConfig.color} initialDifficulty={gameConfig.difficulty}>
+        <GameContent playerColor={gameConfig.color} />
       </GameProvider>
     </DndProvider>
   );

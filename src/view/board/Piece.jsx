@@ -1,6 +1,7 @@
 import React from 'react'
 import { DragPreviewImage, useDrag } from 'react-dnd'
 import ItemTypes from './ItemTypes'
+import { useGameState, COLOR_FILTERS } from './GameContext'
 
 import seedImage from './images/seed.png'
 import treeSmallImage from './images/tree-small.png'
@@ -14,13 +15,11 @@ const pieceImages = {
   'tree-large': treeLargeImage,
 }
 
-// Player 2 pieces are tinted blue using a CSS filter
-const OWNER_FILTER = {
-  p1: 'none',
-  p2: 'hue-rotate(150deg) saturate(1.4) brightness(1.05)',
-}
+// AI (p2) is always blue
+const P2_FILTER = 'hue-rotate(150deg) saturate(1.4) brightness(1.05)';
 
 export const Piece = ({ type, id, fillContainer = false, isFromInventory = false, owner = 'p1', disabled = false }) => {
+  const { playerColor } = useGameState();
   const [{ isDragging }, drag, preview] = useDrag({
     type: ItemTypes.PIECE,
     item: { type: ItemTypes.PIECE, id },
@@ -31,7 +30,7 @@ export const Piece = ({ type, id, fillContainer = false, isFromInventory = false
   })
 
   const pieceImage = pieceImages[type] || seedImage
-  const filter = OWNER_FILTER[owner] || 'none'
+  const filter = owner === 'p2' ? P2_FILTER : (COLOR_FILTERS[playerColor] || 'none')
 
   const imageStyle = fillContainer ? {
     width: '100%',
