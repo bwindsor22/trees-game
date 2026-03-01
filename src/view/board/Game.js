@@ -130,12 +130,7 @@ export function canMovePiece(pieceId, toX, toY, targetLocation, lp) {
     if (isFromInventory) pieceType = inv[pieceId].type;
     else pieceType = avail[pieceId].type;
 
-    const movementCost = movementCosts[pieceType] || 0;
-    const buyCost = isFromInventory ? getSlotCost(inv[pieceId].position) : 0;
-    const totalCost = movementCost + buyCost;
-    if (totalCost > lp) return false;
-
-    // Setup phase: only available small trees on outer ring
+    // Setup phase: initial placement is FREE (no LP cost) per rulebook
     if (!setupDone) {
       if (setupPlaced[currentPlayer] >= SETUP_TREES_NEEDED) return false;
       if (!isFromAvailable) return false;
@@ -143,6 +138,11 @@ export function canMovePiece(pieceId, toX, toY, targetLocation, lp) {
       if (hexDistance(toX, toY, 0, 0) !== 3) return false;
       return boardState[`${toX},${toY}`] === undefined;
     }
+
+    const movementCost = movementCosts[pieceType] || 0;
+    const buyCost = isFromInventory ? getSlotCost(inv[pieceId].position) : 0;
+    const totalCost = movementCost + buyCost;
+    if (totalCost > lp) return false;
 
     const boardKey = `${toX},${toY}`;
     if (activatedSquaresThisTurn.has(boardKey)) return false;
@@ -210,8 +210,9 @@ export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
 
     if (pieceType) {
       const boardKey = `${toX},${toY}`;
-      const movementCost = movementCosts[pieceType] || 0;
-      const buyCost = fromLocation === 'inventory' ? getSlotCost(inv[pieceId].position) : 0;
+      const setupDone = setupPlaced.p1 >= SETUP_TREES_NEEDED && setupPlaced.p2 >= SETUP_TREES_NEEDED;
+      const movementCost = setupDone ? (movementCosts[pieceType] || 0) : 0; // free during setup
+      const buyCost = (setupDone && fromLocation === 'inventory') ? getSlotCost(inv[pieceId].position) : 0;
       const totalCost = movementCost + buyCost;
 
       // Growing: displaced piece returns to current player's inventory
@@ -334,15 +335,16 @@ export function getDropHint(pieceId, toX, toY, lp) {
   if (isFromInventory) pieceType = inv[pieceId].type;
   else pieceType = avail[pieceId].type;
 
-  const movementCost = movementCosts[pieceType] || 0;
-  const buyCost = isFromInventory ? getSlotCost(inv[pieceId].position) : 0;
-  const totalCost = movementCost + buyCost;
-  if (totalCost > lp) return `Need ${totalCost} light points (you have ${lp}).`;
-
   if (!setupDone) {
+    // Setup placement is free — no LP check
     if (!isFromAvailable) return "During setup, use only your available pieces (not the store).";
     if (pieceType !== 'tree-small') return "During setup, only small trees can be placed.";
     if (hexDistance(toX, toY, 0, 0) !== 3) return "During setup, place trees on the outer ring only.";
+  } else {
+    const movementCost = movementCosts[pieceType] || 0;
+    const buyCost = isFromInventory ? getSlotCost(inv[pieceId].position) : 0;
+    const totalCost = movementCost + buyCost;
+    if (totalCost > lp) return `Need ${totalCost} light points (you have ${lp}).`;
   }
 
   const boardKey = `${toX},${toY}`;
