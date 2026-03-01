@@ -1,32 +1,58 @@
 import React, { useState } from 'react';
+import leaf1 from './board/images/1-leaf.jpg';
+import leaf2 from './board/images/2-leaf.jpg';
+import seedImage from './board/images/seed.png';
+import treeSmallImage from './board/images/tree-small.png';
+import treeMediumImage from './board/images/tree-medium.png';
+import treeLargeImage from './board/images/tree-large.png';
+
+const TREE_IMAGES = { seed: seedImage, small: treeSmallImage, medium: treeMediumImage, large: treeLargeImage };
+const TREE_SIZES = { seed: 14, small: 22, medium: 32, large: 42 };
+
+// Render a tree piece image the same way the game does
+const TreeImg = ({ type, faded = false }) => {
+  const size = TREE_SIZES[type] || 22;
+  return (
+    <img
+      src={TREE_IMAGES[type]}
+      alt={type}
+      style={{ width: size, height: size, objectFit: 'contain', opacity: faded ? 0.3 : 1 }}
+    />
+  );
+};
 
 // ─── Mini board fragment helpers ──────────────────────────────────────────────
 
-const TREE_EMOJI = { seed: '🌱', small: '🌿', medium: '🌲', large: '🌳' };
-
-// A single hex cell in the tutorial diagrams
-const Cell = ({ label, bg = '#e8f5e9', border = '#aed581', children, size = 52 }) => (
-  <div style={{
-    width: size, height: size,
-    borderRadius: '50%',
-    background: bg,
-    border: `2px solid ${border}`,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: size > 44 ? '20px' : '15px',
-    position: 'relative',
-    flexShrink: 0,
-  }}>
-    {children}
-    {label && (
-      <span style={{ fontSize: '9px', position: 'absolute', bottom: 2, color: '#555', fontFamily: 'sans-serif' }}>
-        {label}
-      </span>
-    )}
-  </div>
-);
+// A single hex cell in the tutorial diagrams — uses real board leaf images
+const Cell = ({ label, shadowed = false, children, size = 52, ring = 1 }) => {
+  const bgImage = ring <= 1 ? leaf1 : leaf2;
+  return (
+    <div style={{
+      width: size, height: size,
+      borderRadius: '50%',
+      backgroundImage: `url(${bgImage})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      border: '2px solid rgba(0,0,0,0.25)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: size > 44 ? '20px' : '15px',
+      position: 'relative',
+      flexShrink: 0,
+      // Darken shadowed cells like the game does
+      boxShadow: shadowed ? 'inset 0 0 0 52px rgba(0,0,0,0.45)' : 'none',
+    }}>
+      {children}
+      {label && (
+        <span style={{ fontSize: '9px', position: 'absolute', bottom: 2, color: '#fff', fontFamily: 'sans-serif', textShadow: '0 0 3px #000' }}>
+          {label}
+        </span>
+      )}
+    </div>
+  );
+};
 
 const Arrow = ({ label }) => (
   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 4px', color: '#f9a825', fontSize: '20px' }}>
@@ -93,9 +119,11 @@ const STEPS = [
           LP earned per unshadowed tree each turn:
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          {[['🌿', 'Small', '1 LP'], ['🌲', 'Medium', '2 LP'], ['🌳', 'Large', '3 LP']].map(([e, n, v]) => (
+          {[['small', 'Small', '1 LP'], ['medium', 'Medium', '2 LP'], ['large', 'Large', '3 LP']].map(([type, n, v]) => (
             <div key={n} style={{ textAlign: 'center', fontFamily: 'sans-serif' }}>
-              <div style={{ fontSize: '24px' }}>{e}</div>
+              <div style={{ display: 'flex', justifyContent: 'center', height: 36, alignItems: 'center' }}>
+                <TreeImg type={type} />
+              </div>
               <div style={{ fontSize: '10px', color: '#555' }}>{n}</div>
               <div style={{ fontSize: '11px', color: '#1b5e20', fontWeight: 'bold' }}>{v}</div>
             </div>
@@ -112,15 +140,13 @@ const STEPS = [
       <DiagramBox>
         <SunArrow dir="right" />
         <Row label="Large tree shadows the small tree (1 hex away):">
-          <Cell bg="#e8f5e9"><span>🌳</span></Cell>
+          <Cell><TreeImg type="large" /></Cell>
           <Arrow label="shadow" />
-          <Cell bg="#9e9e9e" border="#757575" label="blocked">
-            <span style={{ opacity: 0.4 }}>🌿</span>
-          </Cell>
+          <Cell shadowed label="blocked"><TreeImg type="small" faded /></Cell>
           <Arrow />
-          <Cell bg="#e8f5e9"><span style={{ opacity: 0.3 }}>shadow</span></Cell>
+          <Cell shadowed><span style={{ fontSize: '9px', color: '#aaa', fontFamily: 'sans-serif' }}>shadow</span></Cell>
         </Row>
-        <Caption>The 🌳 large tree's shadow covers 3 hexes. The 🌿 small tree inside that shadow earns no LP.</Caption>
+        <Caption>The large tree's shadow covers 3 hexes. The small tree inside that shadow earns no LP.</Caption>
       </DiagramBox>
     ),
   },
@@ -132,18 +158,16 @@ const STEPS = [
       <DiagramBox>
         <SunArrow dir="right" />
         <Row label="Small tree's shadow does NOT block the large tree:">
-          <Cell bg="#e8f5e9"><span>🌿</span></Cell>
+          <Cell><TreeImg type="small" /></Cell>
           <Arrow label="shadow" />
-          <Cell bg="#e8f5e9" label="earns LP!"><span>🌳</span></Cell>
+          <Cell label="earns LP!"><TreeImg type="large" /></Cell>
         </Row>
-        <Caption>🌿 Small tree casts a shadow, but 🌳 large tree is bigger — it still earns LP.</Caption>
+        <Caption>Small tree casts a shadow, but the large tree is bigger — it still earns LP.</Caption>
         <div style={{ marginTop: 10 }} />
         <Row label="Small tree blocks another small tree:">
-          <Cell bg="#e8f5e9"><span>🌿</span></Cell>
+          <Cell><TreeImg type="small" /></Cell>
           <Arrow label="shadow" />
-          <Cell bg="#9e9e9e" border="#757575" label="blocked">
-            <span style={{ opacity: 0.4 }}>🌿</span>
-          </Cell>
+          <Cell shadowed label="blocked"><TreeImg type="small" faded /></Cell>
         </Row>
         <Caption>Equal-size trees block each other — even your own trees.</Caption>
       </DiagramBox>
@@ -159,11 +183,9 @@ const STEPS = [
           <div>
             <SunArrow dir="right" />
             <Row>
-              <Cell bg="#e8f5e9"><span>🌳</span></Cell>
+              <Cell><TreeImg type="large" /></Cell>
               <Arrow />
-              <Cell bg="#9e9e9e" border="#757575" label="blocked">
-                <span style={{ opacity: 0.4 }}>🌿</span>
-              </Cell>
+              <Cell shadowed label="blocked"><TreeImg type="small" faded /></Cell>
             </Row>
             <Caption>Now: small tree blocked</Caption>
           </div>
@@ -171,9 +193,9 @@ const STEPS = [
           <div>
             <SunArrow dir="down" />
             <Row>
-              <Cell bg="#e8f5e9" label="earns LP!"><span>🌿</span></Cell>
+              <Cell label="earns LP!"><TreeImg type="small" /></Cell>
               <div style={{ width: 10 }}/>
-              <Cell bg="#e8f5e9"><span>🌳</span></Cell>
+              <Cell><TreeImg type="large" /></Cell>
             </Row>
             <Caption>After rotation: now both earn LP!</Caption>
           </div>
@@ -189,14 +211,24 @@ const STEPS = [
       <DiagramBox>
         <div style={{ fontFamily: 'sans-serif', fontSize: '12px' }}>
           {[
-            ['🌱→🌿', 'Plant seed from Available → board', '1 LP'],
-            ['🌿→🌲', 'Grow small → medium tree', '2 LP'],
-            ['🌲→🌳', 'Grow medium → large tree', '3 LP'],
-            ['🌳→🏆', 'Harvest large tree for scoring token', '4 LP'],
-            ['Store→Avail', 'Buy piece from Store into Available', 'varies'],
-          ].map(([icon, desc, cost]) => (
-            <div key={icon} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ fontSize: '14px', minWidth: 70 }}>{icon}</span>
+            [['seed','small'], 'Plant seed from Available → board', '1 LP'],
+            [['small','medium'], 'Grow small → medium tree', '2 LP'],
+            [['medium','large'], 'Grow medium → large tree', '3 LP'],
+            [['large',null], 'Harvest large tree for scoring token', '4 LP'],
+            [null, 'Buy piece from Store into Available', 'varies'],
+          ].map(([types, desc, cost]) => (
+            <div key={desc} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{ minWidth: 70, display: 'flex', alignItems: 'center', gap: 2 }}>
+                {types ? (
+                  <>
+                    <TreeImg type={types[0]} />
+                    <span style={{ color: '#888' }}>→</span>
+                    {types[1] ? <TreeImg type={types[1]} /> : <span style={{ fontSize: '14px' }}>🏆</span>}
+                  </>
+                ) : (
+                  <span style={{ fontSize: '11px', color: '#666' }}>Store→Avail</span>
+                )}
+              </div>
               <span style={{ flex: 1, color: '#333' }}>{desc}</span>
               <span style={{ color: '#1b5e20', fontWeight: 'bold', minWidth: 50, textAlign: 'right' }}>{cost}</span>
             </div>

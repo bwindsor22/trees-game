@@ -10,8 +10,6 @@ import StartScreen from "./view/StartScreen";
 import { GameProvider, useGameState, COLOR_FILTERS } from "./view/board/GameContext";
 import { Container, Row, Col } from "react-bootstrap";
 
-const DIFFICULTY_LABELS = { easy: '🌱 Easy', medium: '🌳 Medium', hard: '🏆 Hard' };
-
 // Color swatch shown next to the player label
 const COLOR_SWATCHES = {
   green:  '#388e3c',
@@ -41,8 +39,6 @@ const GameContent = ({ playerColor }) => {
     resetGame,
     currentPlayer,
     aiThinking,
-    difficulty,
-    setDifficulty,
   } = useGameState();
 
   const [showTutorial, setShowTutorial] = useState(true);
@@ -139,25 +135,6 @@ const GameContent = ({ playerColor }) => {
               </span>
             </div>
 
-            {/* Difficulty selector */}
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-              {Object.entries(DIFFICULTY_LABELS).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setDifficulty(key)}
-                  disabled={isSetupComplete}
-                  style={{
-                    fontSize: '11px', padding: '2px 8px', borderRadius: '5px',
-                    border: difficulty === key ? '2px solid #f9a825' : '1px solid #ddd',
-                    background: difficulty === key ? '#fffde7' : '#fff',
-                    cursor: isSetupComplete ? 'default' : 'pointer',
-                    fontWeight: difficulty === key ? 'bold' : 'normal',
-                    opacity: isSetupComplete ? 0.6 : 1,
-                  }}
-                  title={isSetupComplete ? 'Difficulty locked after setup' : `Set difficulty to ${key}`}
-                >{label}</button>
-              ))}
-            </div>
           </div>
 
           {/* Player 1 — human */}
