@@ -25,17 +25,13 @@ const GameContent = ({ playerColor }) => {
     boardState,
     piecesInInventory,
     piecesAvailable,
-    piecesInInventory2,
-    piecesAvailable2,
     inventoriesAll,
     availablesAll,
     lpAll,
     scoreAll,
     aiPlayers,
     lp,
-    lp2,
     score,
-    score2,
     sunPosition,
     sunRevolutions,
     endPlayerTurn,
@@ -56,7 +52,6 @@ const GameContent = ({ playerColor }) => {
     Object.keys(lpAll).map(p => [p, (scoreAll[p] || 0) + Math.floor((lpAll[p] || 0) / 3)])
   );
   const finalP1 = finalScores.p1 || 0;
-  const finalP2 = finalScores.p2 || 0;
   const swatch = COLOR_SWATCHES[playerColor] || COLOR_SWATCHES.green;
 
   return (
@@ -198,8 +193,9 @@ const GameContent = ({ playerColor }) => {
             const aiInv = inventoriesAll[p] || {};
             const aiAvail = availablesAll[p] || {};
             const isActive = currentPlayer === p && aiThinking;
-            const colorKeys = ['blue', 'purple', 'orange'];
-            const colorKey = colorKeys[i] || 'blue';
+            const aiColorOrder = ['blue', 'orange', 'purple', 'green'];
+            const available = aiColorOrder.filter(c => c !== playerColor);
+            const colorKey = available[i % available.length] || 'blue';
             return (
               <div key={p} style={{ marginBottom: '16px' }}>
                 <div style={{

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { observe, clearTurnActions, setCurrentPlayer, resetGame as resetGameModule, initGame, getPlayerList } from './Game';
+import { observe, clearTurnActions, setCurrentPlayer, resetGame as resetGameModule, initGame } from './Game';
 import { executeAITurn, getAISetupPositions } from '../../AI/ai';
 import { movePiece, getBoardState } from './Game';
 

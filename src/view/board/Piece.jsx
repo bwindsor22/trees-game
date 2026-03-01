@@ -15,8 +15,15 @@ const pieceImages = {
   'tree-large': treeLargeImage,
 }
 
-// AI (p2) is always blue
-const P2_FILTER = 'hue-rotate(150deg) saturate(1.4) brightness(1.05)';
+// Color rotation order for AI players — rotated so first pick avoids player's color
+const AI_COLOR_ORDER = ['blue', 'orange', 'purple', 'green'];
+
+function getAIFilter(playerColor, ownerIndex) {
+  // ownerIndex: 0 = p2, 1 = p3, 2 = p4
+  const available = AI_COLOR_ORDER.filter(c => c !== playerColor);
+  const colorKey = available[ownerIndex % available.length];
+  return COLOR_FILTERS[colorKey] || COLOR_FILTERS.blue;
+}
 
 export const Piece = ({ type, id, fillContainer = false, isFromInventory = false, owner = 'p1', disabled = false }) => {
   const { playerColor } = useGameState();
@@ -30,7 +37,14 @@ export const Piece = ({ type, id, fillContainer = false, isFromInventory = false
   })
 
   const pieceImage = pieceImages[type] || seedImage
-  const filter = owner === 'p2' ? P2_FILTER : (COLOR_FILTERS[playerColor] || 'none')
+  let filter;
+  if (owner === 'p1') {
+    filter = COLOR_FILTERS[playerColor] || 'none';
+  } else {
+    // p2 → index 0, p3 → index 1, p4 → index 2
+    const ownerIndex = parseInt(owner.replace('p', ''), 10) - 2;
+    filter = getAIFilter(playerColor, ownerIndex);
+  }
 
   const imageStyle = fillContainer ? {
     width: '100%',
