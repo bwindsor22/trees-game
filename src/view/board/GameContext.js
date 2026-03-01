@@ -221,6 +221,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
         { p1: scoreRef.current, p2: score2Ref.current },
         difficulty,
       );
+      setCurrentPlayer('p1');       // reset Game.js module-level state (AI set it to 'p2')
       setCurrentPlayerState('p1');
 
       // After AI moves, advance sun and run photosynthesis

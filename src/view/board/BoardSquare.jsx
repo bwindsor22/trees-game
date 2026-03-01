@@ -30,6 +30,8 @@ export const BoardSquare = ({ x, y, bkgd, isShadowed, children }) => {
   return (
     <div
       ref={drop}
+      data-board-x={x}
+      data-board-y={y}
       style={{
         position: 'relative',
         display: 'block',
