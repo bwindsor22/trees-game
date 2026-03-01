@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { observe, clearTurnActions, setCurrentPlayer, resetGame as resetGameModule } from './Game';
+import { observe, clearTurnActions, setCurrentPlayer, resetGame as resetGameModule, initGame, getPlayerList } from './Game';
 import { executeAITurn, getAISetupPositions } from '../../AI/ai';
 import { movePiece, getBoardState } from './Game';
 
@@ -66,17 +66,29 @@ export const COLOR_FILTERS = {
   orange: 'hue-rotate(30deg) saturate(2) brightness(1.1)',
 };
 
-export const GameProvider = ({ children, initialColor = 'green', initialDifficulty = 'medium' }) => {
+export const GameProvider = ({ children, initialColor = 'green', initialDifficulty = 'medium', numAI = 1 }) => {
+  // playerList: ['p1', 'p2'] for 1 AI, ['p1','p2','p3'] for 2 AI, etc.
+  const playerListRef = useRef(['p1', ...Array.from({ length: numAI }, (_, i) => `p${i + 2}`)]);
+  const aiPlayers = playerListRef.current.slice(1); // all non-p1
+
   const [playerColor] = useState(initialColor);
   const [boardState, setBoardState] = useState({});
-  const [piecesInInventory, setPiecesInInventory] = useState({});
-  const [piecesAvailable, setPiecesAvailable] = useState({});
-  const [piecesInInventory2, setPiecesInInventory2] = useState({});
-  const [piecesAvailable2, setPiecesAvailable2] = useState({});
-  const [lp, setLp] = useState(0);
-  const [lp2, setLp2] = useState(0);
-  const [score, setScore] = useState(0);
-  const [score2, setScore2] = useState(0);
+  // Per-player inventory, available, lp, score — stored as objects keyed by player id
+  const [inventoriesAll, setInventoriesAll] = useState({});
+  const [availablesAll, setAvailablesAll] = useState({});
+  const [lpAll, setLpAll] = useState(Object.fromEntries(playerListRef.current.map(p => [p, 0])));
+  const [scoreAll, setScoreAll] = useState(Object.fromEntries(playerListRef.current.map(p => [p, 0])));
+
+  // Backwards-compat aliases for App.js (p1/p2)
+  const piecesInInventory = inventoriesAll.p1 || {};
+  const piecesAvailable = availablesAll.p1 || {};
+  const piecesInInventory2 = inventoriesAll.p2 || {};
+  const piecesAvailable2 = availablesAll.p2 || {};
+  const lp = lpAll.p1 || 0;
+  const lp2 = lpAll.p2 || 0;
+  const score = scoreAll.p1 || 0;
+  const score2 = scoreAll.p2 || 0;
+
   const [sunPosition, setSunPosition] = useState(0);
   const [sunRevolutions, setSunRevolutions] = useState(0);
   const [shadowedSquares, setShadowedSquares] = useState(new Set());
@@ -91,44 +103,52 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
   const [aiThinking, setAiThinking] = useState(false);
   const [difficulty, setDifficulty] = useState(initialDifficulty);
 
-  // Use refs to avoid stale closures in callbacks
-  const lpRef = useRef(0);
-  const lp2Ref = useRef(0);
+  // Refs to avoid stale closures in async callbacks
+  const lpAllRef = useRef(Object.fromEntries(playerListRef.current.map(p => [p, 0])));
+  const scoreAllRef = useRef(Object.fromEntries(playerListRef.current.map(p => [p, 0])));
+  // Keep refs in sync
+  const lpRef = useRef(0);       // p1 alias
+  const lp2Ref = useRef(0);      // p2 alias
   const scoreRef = useRef(0);
   const score2Ref = useRef(0);
   lpRef.current = lp;
   lp2Ref.current = lp2;
   scoreRef.current = score;
   score2Ref.current = score2;
+  lpAllRef.current = lpAll;
+  scoreAllRef.current = scoreAll;
+
+  // Initialize game with the correct player count
+  useEffect(() => {
+    initGame(playerListRef.current);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const unsubscribe = observe((newBoardState, newInventories, newAvailable, options = {}) => {
       setBoardState(newBoardState);
-      setPiecesInInventory(newInventories.p1);
-      setPiecesAvailable(newAvailable.p1);
-      setPiecesInInventory2(newInventories.p2);
-      setPiecesAvailable2(newAvailable.p2);
+      setInventoriesAll({ ...newInventories });
+      setAvailablesAll({ ...newAvailable });
 
       const actingPlayer = options.currentPlayer || 'p1';
 
       if (options.lpChange) {
-        if (actingPlayer === 'p1') {
-          setLp(prev => { const n = Math.max(0, prev + options.lpChange); lpRef.current = n; return n; });
-          if (options.lpChange < 0) setLastTurnScores({});
-        } else {
-          setLp2(prev => { const n = Math.max(0, prev + options.lpChange); lp2Ref.current = n; return n; });
-        }
+        setLpAll(prev => {
+          const n = { ...prev, [actingPlayer]: Math.max(0, (prev[actingPlayer] || 0) + options.lpChange) };
+          lpAllRef.current = n;
+          return n;
+        });
+        if (options.lpChange < 0 && actingPlayer === 'p1') setLastTurnScores({});
       }
       if (options.scoreChange) {
-        if (actingPlayer === 'p1') {
-          setScore(prev => { const n = prev + options.scoreChange; scoreRef.current = n; return n; });
-        } else {
-          setScore2(prev => { const n = prev + options.scoreChange; score2Ref.current = n; return n; });
-        }
+        setScoreAll(prev => {
+          const n = { ...prev, [actingPlayer]: (prev[actingPlayer] || 0) + options.scoreChange };
+          scoreAllRef.current = n;
+          return n;
+        });
       }
       if (options.setupPlaced !== undefined) {
-        setP1SetupDone(options.setupPlaced.p1 >= 2);
-        const done = options.setupPlaced.p1 >= 2 && options.setupPlaced.p2 >= 2;
+        setP1SetupDone((options.setupPlaced.p1 || 0) >= 2);
+        const done = playerListRef.current.every(p => (options.setupPlaced[p] || 0) >= 2);
         setIsSetupComplete(done);
       }
       if (options.scorePiles) {
@@ -136,7 +156,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recompute shadows whenever board or sun position changes
   useEffect(() => {
@@ -144,45 +164,58 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     setVisualShadowedSquares(computeVisualShadows(boardState, sunPosition));
   }, [boardState, sunPosition]);
 
-  // When P1 finishes setup (places 2 trees), trigger AI setup placement.
-  // Depends on p1SetupDone (not isSetupComplete) so it fires as soon as p1 is done,
-  // before p2 has placed — which is exactly when we need to trigger the AI.
+  // When P1 finishes setup, trigger each AI player to place setup trees in sequence.
   useEffect(() => {
     if (!p1SetupDone || aiThinking) return;
     const live = getBoardState();
-    if (live.setupPlaced.p2 >= 2) return; // AI already placed
+    // Check if any AI player still needs to place
+    if (aiPlayers.every(p => (live.setupPlaced[p] || 0) >= 2)) return;
     setAiThinking(true);
-    setTimeout(() => {
-      const positions = getAISetupPositions(live.boardState);
-      setCurrentPlayer('p2');
-      const aiAvail = live.available.p2;
-      const smallTrees = Object.entries(aiAvail).filter(([, p]) => p.type === 'tree-small');
-      positions.forEach(([x, y], i) => {
-        if (smallTrees[i]) {
-          movePiece(smallTrees[i][0], x, y, 'board');
-        }
-      });
-      setCurrentPlayer('p1');
-      setCurrentPlayerState('p1');
 
-      // Run initial photosynthesis at sun position 0 (rulebook: photosynthesis fires
-      // before the first lifecycle turn, giving players LP from their starting trees).
-      const liveAfter = getBoardState();
-      const lpShadows = computeLPShadows(liveAfter.boardState, 0);
-      const lpGainedP1 = calculatePhotosynthesisLP(liveAfter.boardState, lpShadows, 'p1');
-      const lpGainedP2 = calculatePhotosynthesisLP(liveAfter.boardState, lpShadows, 'p2');
-      const initialScores = {};
-      Object.entries(liveAfter.boardState).forEach(([key, piece]) => {
-        const earned = LP_PER_TREE[piece.type];
-        if (earned && !lpShadows.has(key)) initialScores[key] = earned;
-      });
-      setLp(prev => { const n = Math.min(20, prev + lpGainedP1); lpRef.current = n; return n; });
-      setLp2(prev => { const n = Math.min(20, prev + lpGainedP2); lp2Ref.current = n; return n; });
-      setLastLpGained(lpGainedP1);
-      setLastTurnScores(initialScores);
-
-      setAiThinking(false);
-    }, 400);
+    // Sequentially place trees for each AI player that hasn't placed yet
+    function placeForAI(idx) {
+      if (idx >= aiPlayers.length) {
+        // All AI players have placed — run initial photosynthesis
+        setCurrentPlayer('p1');
+        setCurrentPlayerState('p1');
+        const liveAfter = getBoardState();
+        const lpShadows = computeLPShadows(liveAfter.boardState, 0);
+        const scores = {};
+        const lpGains = {};
+        playerListRef.current.forEach(p => {
+          lpGains[p] = calculatePhotosynthesisLP(liveAfter.boardState, lpShadows, p);
+        });
+        Object.entries(liveAfter.boardState).forEach(([key, piece]) => {
+          const earned = LP_PER_TREE[piece.type];
+          if (earned && !lpShadows.has(key)) scores[key] = earned;
+        });
+        setLpAll(prev => {
+          const n = Object.fromEntries(
+            Object.entries(prev).map(([p, v]) => [p, Math.min(20, v + (lpGains[p] || 0))])
+          );
+          lpAllRef.current = n;
+          return n;
+        });
+        setLastLpGained(lpGains.p1 || 0);
+        setLastTurnScores(scores);
+        setAiThinking(false);
+        return;
+      }
+      const aiPlayer = aiPlayers[idx];
+      const live2 = getBoardState();
+      if ((live2.setupPlaced[aiPlayer] || 0) >= 2) { placeForAI(idx + 1); return; }
+      setTimeout(() => {
+        const positions = getAISetupPositions(live2.boardState);
+        setCurrentPlayer(aiPlayer);
+        const aiAvail = live2.available[aiPlayer] || {};
+        const smallTrees = Object.entries(aiAvail).filter(([, p]) => p.type === 'tree-small');
+        positions.forEach(([x, y], i) => {
+          if (smallTrees[i]) movePiece(smallTrees[i][0], x, y, 'board');
+        });
+        placeForAI(idx + 1);
+      }, 400);
+    }
+    placeForAI(0);
   }, [p1SetupDone, aiThinking]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const advanceSunAndPhotosynthesis = useCallback((currentBoardState, currentSunPos, currentRevolutions) => {
@@ -192,8 +225,9 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     if (completingRevolution) setSunRevolutions(newRevolutions);
 
     const newLPShadows = computeLPShadows(currentBoardState, newSunPos);
-    const lpGainedP1 = calculatePhotosynthesisLP(currentBoardState, newLPShadows, 'p1');
-    const lpGainedP2 = calculatePhotosynthesisLP(currentBoardState, newLPShadows, 'p2');
+    const lpGains = Object.fromEntries(
+      playerListRef.current.map(p => [p, calculatePhotosynthesisLP(currentBoardState, newLPShadows, p)])
+    );
 
     const scores = {};
     Object.entries(currentBoardState).forEach(([key, piece]) => {
@@ -202,43 +236,57 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     });
 
     setSunPosition(newSunPos);
-    setLp(prev => { const n = Math.min(20, prev + lpGainedP1); lpRef.current = n; return n; });
-    setLp2(prev => { const n = Math.min(20, prev + lpGainedP2); lp2Ref.current = n; return n; });
-    setLastLpGained(lpGainedP1);
+    setLpAll(prev => {
+      const n = Object.fromEntries(
+        Object.entries(prev).map(([p, v]) => [p, Math.min(20, v + (lpGains[p] || 0))])
+      );
+      lpAllRef.current = n;
+      return n;
+    });
+    setLastLpGained(lpGains.p1 || 0);
     setLastTurnScores(scores);
 
     if (newRevolutions >= 3) setIsGameOver(true);
   }, []);
 
-  // Human ends their lifecycle turn → AI plays → sun advances
+  // Human ends their lifecycle turn → run each AI player in sequence → sun advances
   const endPlayerTurn = useCallback(() => {
     setAiThinking(true);
-    setCurrentPlayerState('p2');
+    const delay = difficulty === 'easy' ? 300 : difficulty === 'medium' ? 500 : 800;
 
-    setTimeout(() => {
-      executeAITurn(
-        { p1: lpRef.current, p2: lp2Ref.current },
-        { p1: scoreRef.current, p2: score2Ref.current },
-        difficulty,
-      );
-      setCurrentPlayer('p1');       // reset Game.js module-level state (AI set it to 'p2')
-      setCurrentPlayerState('p1');
+    function runAIChain(idx) {
+      if (idx >= aiPlayers.length) {
+        // All AI done — advance sun
+        setCurrentPlayer('p1');
+        setCurrentPlayerState('p1');
+        clearTurnActions();
+        const liveAfter = getBoardState();
+        advanceSunAndPhotosynthesis(liveAfter.boardState, sunPosition, sunRevolutions);
+        setCurrentPlayerState('p1');
+        setAiThinking(false);
+        return;
+      }
+      const aiPlayer = aiPlayers[idx];
+      setCurrentPlayerState(aiPlayer);
+      setTimeout(() => {
+        executeAITurn(
+          { ...lpAllRef.current },
+          { ...scoreAllRef.current },
+          difficulty,
+          aiPlayer,
+        );
+        setCurrentPlayer('p1'); // reset module-level state before next AI
+        runAIChain(idx + 1);
+      }, delay);
+    }
 
-      // After AI moves, advance sun and run photosynthesis
-      clearTurnActions();
-      const liveAfter = getBoardState();
-      advanceSunAndPhotosynthesis(liveAfter.boardState, sunPosition, sunRevolutions);
-
-      setCurrentPlayerState('p1');
-      setAiThinking(false);
-    }, difficulty === 'easy' ? 300 : difficulty === 'medium' ? 500 : 800);
-  }, [difficulty, sunPosition, sunRevolutions, advanceSunAndPhotosynthesis]);
+    runAIChain(0);
+  }, [difficulty, sunPosition, sunRevolutions, advanceSunAndPhotosynthesis, aiPlayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetGame = useCallback(() => {
-    setLp(0); lpRef.current = 0;
-    setLp2(0); lp2Ref.current = 0;
-    setScore(0); scoreRef.current = 0;
-    setScore2(0); score2Ref.current = 0;
+    const zeroed = Object.fromEntries(playerListRef.current.map(p => [p, 0]));
+    setLpAll({ ...zeroed }); lpAllRef.current = { ...zeroed };
+    setScoreAll({ ...zeroed }); scoreAllRef.current = { ...zeroed };
     setSunPosition(0);
     setSunRevolutions(0);
     setShadowedSquares(new Set());
@@ -257,6 +305,13 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
   return (
     <GameContext.Provider value={{
       boardState,
+      // Per-player data (keyed by player id)
+      inventoriesAll,
+      availablesAll,
+      lpAll,
+      scoreAll,
+      aiPlayers,
+      // Backwards-compat aliases for p1/p2
       piecesInInventory,
       piecesAvailable,
       piecesInInventory2,

@@ -1,9 +1,14 @@
-// Two-player game state
+// N-player game state (playerList is configurable)
+let playerList = ['p1', 'p2'];
 let boardState = {};
-let inventories = { p1: {}, p2: {} };
-let available = { p1: {}, p2: {} };
-let setupPlaced = { p1: 0, p2: 0 };
+let inventories = {};
+let available = {};
+let setupPlaced = {};
 const SETUP_TREES_NEEDED = 2;
+
+function allPlayersSetupDone() {
+  return playerList.every(p => (setupPlaced[p] || 0) >= SETUP_TREES_NEEDED);
+}
 
 // The player whose pieces are currently being interacted with
 let currentPlayer = 'p1';
@@ -23,6 +28,10 @@ let scorePiles = SCORE_PILES_INIT.map(p => [...p]);
 
 let observers = [];
 
+function snapAll(obj) {
+  return Object.fromEntries(playerList.map(p => [p, { ...obj[p] }]));
+}
+
 function emitChange(options = {}) {
   const fullOptions = {
     ...options,
@@ -32,8 +41,8 @@ function emitChange(options = {}) {
   };
   observers.forEach((o) => o && o(
     { ...boardState },
-    { p1: { ...inventories.p1 }, p2: { ...inventories.p2 } },
-    { p1: { ...available.p1 }, p2: { ...available.p2 } },
+    snapAll(inventories),
+    snapAll(available),
     fullOptions
   ));
 }
@@ -42,8 +51,8 @@ export function observe(o) {
   observers.push(o);
   o(
     { ...boardState },
-    { p1: { ...inventories.p1 }, p2: { ...inventories.p2 } },
-    { p1: { ...available.p1 }, p2: { ...available.p2 } },
+    snapAll(inventories),
+    snapAll(available),
     {
       setupPlaced: { ...setupPlaced },
       scorePiles: scorePiles.map(p => [...p]),
@@ -119,7 +128,7 @@ function findOpenSlotForType(type, player) {
 export function canMovePiece(pieceId, toX, toY, targetLocation, lp) {
   const inv = inventories[currentPlayer];
   const avail = available[currentPlayer];
-  const setupDone = setupPlaced.p1 >= SETUP_TREES_NEEDED && setupPlaced.p2 >= SETUP_TREES_NEEDED;
+  const setupDone = allPlayersSetupDone();
 
   if (targetLocation === 'board') {
     const isFromInventory = pieceId in inv;
@@ -210,7 +219,7 @@ export function movePiece(pieceId, toX, toY, targetLocation = 'board') {
 
     if (pieceType) {
       const boardKey = `${toX},${toY}`;
-      const setupDone = setupPlaced.p1 >= SETUP_TREES_NEEDED && setupPlaced.p2 >= SETUP_TREES_NEEDED;
+      const setupDone = allPlayersSetupDone();
       const movementCost = setupDone ? (movementCosts[pieceType] || 0) : 0; // free during setup
       const buyCost = (setupDone && fromLocation === 'inventory') ? getSlotCost(inv[pieceId].position) : 0;
       const totalCost = movementCost + buyCost;
@@ -316,7 +325,7 @@ export function getDropHint(pieceId, toX, toY, lp) {
   const avail = available[currentPlayer];
   const isFromInventory = pieceId in inv;
   const isFromAvailable = pieceId in avail;
-  const setupDone = setupPlaced.p1 >= SETUP_TREES_NEEDED && setupPlaced.p2 >= SETUP_TREES_NEEDED;
+  const setupDone = allPlayersSetupDone();
 
   if (!isFromInventory && !isFromAvailable) {
     const boardEntry = Object.entries(boardState).find(([, piece]) => piece.id === pieceId);
@@ -392,13 +401,17 @@ export function getDropHint(pieceId, toX, toY, lp) {
 export function getBoardState() {
   return {
     boardState: { ...boardState },
-    inventories: { p1: { ...inventories.p1 }, p2: { ...inventories.p2 } },
-    available: { p1: { ...available.p1 }, p2: { ...available.p2 } },
+    inventories: snapAll(inventories),
+    available: snapAll(available),
     setupPlaced: { ...setupPlaced },
     scorePiles: scorePiles.map(p => [...p]),
     currentPlayer,
     activatedSquaresThisTurn: new Set(activatedSquaresThisTurn),
   };
+}
+
+export function getPlayerList() {
+  return [...playerList];
 }
 
 function initPlayerInventory(player, startId) {
@@ -416,20 +429,30 @@ function initPlayerInventory(player, startId) {
   return id;
 }
 
-export function resetGame() {
+function _initState(players) {
+  playerList = players;
   boardState = {};
-  inventories = { p1: {}, p2: {} };
-  available = { p1: {}, p2: {} };
-  setupPlaced = { p1: 0, p2: 0 };
+  inventories = Object.fromEntries(players.map(p => [p, {}]));
+  available = Object.fromEntries(players.map(p => [p, {}]));
+  setupPlaced = Object.fromEntries(players.map(p => [p, 0]));
   currentPlayer = 'p1';
   activatedSquaresThisTurn = new Set();
   scorePiles = SCORE_PILES_INIT.map(p => [...p]);
-  const next = initPlayerInventory('p1', 0);
-  initPlayerInventory('p2', next);
+  let id = 0;
+  for (const p of players) {
+    id = initPlayerInventory(p, id);
+  }
+}
+
+export function initGame(players = ['p1', 'p2']) {
+  _initState(players);
   emitChange();
 }
 
-(function initializeGame() {
-  const next = initPlayerInventory('p1', 0);
-  initPlayerInventory('p2', next);
-})();
+export function resetGame() {
+  _initState(playerList);
+  emitChange();
+}
+
+// Default 2-player initialization at module load time
+_initState(['p1', 'p2']);

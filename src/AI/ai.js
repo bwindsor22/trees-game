@@ -56,8 +56,8 @@ function findOpenSlot(type, inv) {
 function snapshot(state) {
   return {
     boardState: { ...state.boardState },
-    inventories: { p1: { ...state.inventories.p1 }, p2: { ...state.inventories.p2 } },
-    available: { p1: { ...state.available.p1 }, p2: { ...state.available.p2 } },
+    inventories: Object.fromEntries(Object.entries(state.inventories).map(([p, inv]) => [p, { ...inv }])),
+    available: Object.fromEntries(Object.entries(state.available).map(([p, av]) => [p, { ...av }])),
     lp: { ...state.lp },
     scores: { ...state.scores },
     scorePiles: state.scorePiles.map(p => [...p]),
@@ -204,24 +204,29 @@ function getValidMoves(state, player) {
 const RING_BONUS = [4, 3, 2, 1]; // center → outer
 const TREE_VALUE = { seed: 0.3, 'tree-small': 1, 'tree-medium': 2.2, 'tree-large': 4 };
 
-function evaluate(state) {
+function evaluate(state, aiPlayer = 'p2') {
+  const aiScore = state.scores[aiPlayer] || 0;
+  const aiLp = state.lp[aiPlayer] || 0;
+  const opponents = Object.keys(state.scores).filter(p => p !== aiPlayer);
+  const avgOppScore = opponents.length ? opponents.reduce((s, p) => s + (state.scores[p] || 0), 0) / opponents.length : 0;
+  const avgOppLp = opponents.length ? opponents.reduce((s, p) => s + (state.lp[p] || 0), 0) / opponents.length : 0;
   // Score delta
-  let score = (state.scores.p2 - state.scores.p1) * 12;
+  let score = (aiScore - avgOppScore) * 12;
   // LP delta (converts 3:1 at game end)
-  score += (Math.floor(state.lp.p2 / 3) - Math.floor(state.lp.p1 / 3)) * 2;
+  score += (Math.floor(aiLp / 3) - Math.floor(avgOppLp / 3)) * 2;
   // Board position: weighted by ring and tree size
   for (const [key, piece] of Object.entries(state.boardState)) {
     const [x, y] = key.split(',').map(Number);
     const ring = Math.min(3, Math.round(hexDist(x, y, 0, 0)));
     const val = RING_BONUS[ring] * (TREE_VALUE[piece.type] || 0);
-    score += piece.owner === 'p2' ? val : -val;
+    score += piece.owner === aiPlayer ? val : -val;
   }
   return score;
 }
 
 // ─── search ───────────────────────────────────────────────────────────────────
 
-function bestMoveAtDepth(state, player, depth) {
+function bestMoveAtDepth(state, player, depth, aiPlayer) {
   const moves = getValidMoves(state, player);
   if (moves.length === 0) return null;
 
@@ -233,11 +238,10 @@ function bestMoveAtDepth(state, player, depth) {
 
     let score;
     if (depth <= 1) {
-      score = evaluate(next);
+      score = evaluate(next, aiPlayer);
     } else {
-      // Look one more step ahead for this player
-      const followUp = bestMoveAtDepth(next, player, depth - 1);
-      score = followUp ? evaluate(applyMove(next, followUp, player)) : evaluate(next);
+      const followUp = bestMoveAtDepth(next, player, depth - 1, aiPlayer);
+      score = followUp ? evaluate(applyMove(next, followUp, player), aiPlayer) : evaluate(next, aiPlayer);
     }
 
     if (score > bestScore) {
@@ -251,15 +255,14 @@ function bestMoveAtDepth(state, player, depth) {
 // ─── outer API ────────────────────────────────────────────────────────────────
 
 /**
- * Plan and execute the AI's complete turn.
+ * Plan and execute an AI player's complete turn.
  *
- * @param {Object} lpState     { p1, p2 } current light points
- * @param {Object} scoreState  { p1, p2 } current scores
+ * @param {Object} lpState     all players' current light points { p1, p2, ... }
+ * @param {Object} scoreState  all players' current scores { p1, p2, ... }
  * @param {'easy'|'medium'|'hard'} difficulty
- * @param {Function} onLpChange  (delta) => void  — called after each move
- * @param {Function} onScoreChange (delta) => void
+ * @param {string} aiPlayer    which player the AI is controlling (default 'p2')
  */
-export function executeAITurn(lpState, scoreState, difficulty) {
+export function executeAITurn(lpState, scoreState, difficulty, aiPlayer = 'p2') {
   const depth = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
 
   // Build simulation state from live Game.js state
@@ -268,37 +271,34 @@ export function executeAITurn(lpState, scoreState, difficulty) {
     boardState: live.boardState,
     inventories: live.inventories,
     available: live.available,
-    lp: { p1: lpState.p1, p2: lpState.p2 },
-    scores: { p1: scoreState.p1, p2: scoreState.p2 },
+    lp: { ...lpState },
+    scores: { ...scoreState },
     scorePiles: live.scorePiles,
     activated: new Set(),
-    setupDone: live.setupPlaced.p1 >= 2 && live.setupPlaced.p2 >= 2,
+    setupDone: Object.values(live.setupPlaced).every(v => v >= 2),
   };
 
-  setCurrentPlayer('p2');
+  setCurrentPlayer(aiPlayer);
   clearTurnActions();
 
   let maxMoves = 8; // safety cap per turn
   while (maxMoves-- > 0) {
     let move;
     if (difficulty === 'easy') {
-      // Easy: pick randomly from top 3 moves
-      const moves = getValidMoves(state, 'p2');
+      const moves = getValidMoves(state, aiPlayer);
       if (moves.length === 0) break;
       const candidates = moves.slice(0, Math.min(3, moves.length));
       move = candidates[Math.floor(Math.random() * candidates.length)];
     } else {
-      move = bestMoveAtDepth(state, 'p2', depth);
+      move = bestMoveAtDepth(state, aiPlayer, depth, aiPlayer);
     }
 
     if (!move) break;
 
-    // Only make the move if it improves the position (medium/hard)
-    // Easy mode always makes a move if one exists
     if (difficulty !== 'easy') {
-      const currentScore = evaluate(state);
-      const nextState = applyMove(state, move, 'p2');
-      if (evaluate(nextState) <= currentScore) break; // No improvement — stop
+      const currentScore = evaluate(state, aiPlayer);
+      const nextState = applyMove(state, move, aiPlayer);
+      if (evaluate(nextState, aiPlayer) <= currentScore) break;
     }
 
     // Execute in the real Game.js module
@@ -310,8 +310,7 @@ export function executeAITurn(lpState, scoreState, difficulty) {
       movePiece(move.pieceId, move.toX, move.toY, 'board');
     }
 
-    // Advance simulation state
-    state = applyMove(state, move, 'p2');
+    state = applyMove(state, move, aiPlayer);
   }
 }
 

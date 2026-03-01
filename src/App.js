@@ -27,6 +27,11 @@ const GameContent = ({ playerColor }) => {
     piecesAvailable,
     piecesInInventory2,
     piecesAvailable2,
+    inventoriesAll,
+    availablesAll,
+    lpAll,
+    scoreAll,
+    aiPlayers,
     lp,
     lp2,
     score,
@@ -47,8 +52,11 @@ const GameContent = ({ playerColor }) => {
   const [showTutorial, setShowTutorial] = useState(true);
 
   const isHumanTurn = currentPlayer === 'p1' && !aiThinking && isSetupComplete;
-  const finalP1 = score + Math.floor(lp / 3);
-  const finalP2 = score2 + Math.floor(lp2 / 3);
+  const finalScores = Object.fromEntries(
+    Object.keys(lpAll).map(p => [p, (scoreAll[p] || 0) + Math.floor((lpAll[p] || 0) / 3)])
+  );
+  const finalP1 = finalScores.p1 || 0;
+  const finalP2 = finalScores.p2 || 0;
   const swatch = COLOR_SWATCHES[playerColor] || COLOR_SWATCHES.green;
 
   return (
@@ -79,14 +87,16 @@ const GameContent = ({ playerColor }) => {
               padding: '12px 16px', marginTop: '12px', marginBottom: '8px', textAlign: 'center',
             }}>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '6px' }}>
-                {finalP1 > finalP2 ? '🎉 You Win!' : finalP1 < finalP2 ? '🤖 AI Wins!' : '🤝 Tie!'}
+                {finalP1 >= Math.max(...Object.values(finalScores)) ? '🎉 You Win!' : '🤖 AI Wins!'}
               </div>
               <div style={{ fontSize: '13px', color: '#555', marginBottom: '2px' }}>
-                You: <strong>{score}</strong> pts + {Math.floor(lp / 3)} light point bonus = <strong>{finalP1}</strong>
+                You: <strong>{score}</strong> pts + {Math.floor(lp / 3)} bonus = <strong>{finalP1}</strong>
               </div>
-              <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px' }}>
-                AI: <strong>{score2}</strong> pts + {Math.floor(lp2 / 3)} light point bonus = <strong>{finalP2}</strong>
-              </div>
+              {aiPlayers.map((p, i) => (
+                <div key={p} style={{ fontSize: '13px', color: '#555', marginBottom: i === aiPlayers.length - 1 ? '8px' : '2px' }}>
+                  AI {i + 1}: <strong>{scoreAll[p] || 0}</strong> pts + {Math.floor((lpAll[p] || 0) / 3)} bonus = <strong>{finalScores[p] || 0}</strong>
+                </div>
+              ))}
               <button
                 onClick={resetGame}
                 style={{
@@ -181,27 +191,36 @@ const GameContent = ({ playerColor }) => {
             <Inventory piecesInInventory={piecesInInventory} lp={lp} owner="p1" disabled={aiThinking || currentPlayer !== 'p1'} />
           </div>
 
-          {/* Player 2 — AI */}
-          <div>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px',
-              padding: '4px 8px', borderRadius: '6px',
-              background: aiThinking ? '#e3f2fd' : 'transparent',
-              border: aiThinking ? '1px solid #42a5f5' : '1px solid transparent',
-            }}>
-              <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
-                <span style={{ filter: COLOR_FILTERS.blue, display: 'inline-block' }}>🤖</span> AI
-              </span>
-              <span style={{ fontSize: '14px' }}>
-                <strong>{lp2}</strong> light points
-              </span>
-              <span style={{ fontSize: '14px' }}>🏆 <strong>{score2}</strong> pts</span>
-            </div>
-            <h5 style={{ marginBottom: '4px', fontSize: '13px', color: '#555' }}>Available</h5>
-            <Available piecesAvailable={piecesAvailable2} lp={lp2} owner="p2" disabled={true} />
-            <h5 style={{ marginBottom: '4px', fontSize: '13px', color: '#555' }}>Store</h5>
-            <Inventory piecesInInventory={piecesInInventory2} lp={lp2} owner="p2" disabled={true} />
-          </div>
+          {/* AI players */}
+          {aiPlayers.map((p, i) => {
+            const aiLp = lpAll[p] || 0;
+            const aiScore = scoreAll[p] || 0;
+            const aiInv = inventoriesAll[p] || {};
+            const aiAvail = availablesAll[p] || {};
+            const isActive = currentPlayer === p && aiThinking;
+            const colorKeys = ['blue', 'purple', 'orange'];
+            const colorKey = colorKeys[i] || 'blue';
+            return (
+              <div key={p} style={{ marginBottom: '16px' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px',
+                  padding: '4px 8px', borderRadius: '6px',
+                  background: isActive ? '#e3f2fd' : 'transparent',
+                  border: isActive ? '1px solid #42a5f5' : '1px solid transparent',
+                }}>
+                  <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                    <span style={{ filter: COLOR_FILTERS[colorKey], display: 'inline-block' }}>🤖</span> AI {i + 1}
+                  </span>
+                  <span style={{ fontSize: '14px' }}><strong>{aiLp}</strong> LP</span>
+                  <span style={{ fontSize: '14px' }}>🏆 <strong>{aiScore}</strong> pts</span>
+                </div>
+                <h5 style={{ marginBottom: '4px', fontSize: '13px', color: '#555' }}>Available</h5>
+                <Available piecesAvailable={aiAvail} lp={aiLp} owner={p} disabled={true} />
+                <h5 style={{ marginBottom: '4px', fontSize: '13px', color: '#555' }}>Store</h5>
+                <Inventory piecesInInventory={aiInv} lp={aiLp} owner={p} disabled={true} />
+              </div>
+            );
+          })}
         </Col>
       </Row>
     </Container>
@@ -217,7 +236,7 @@ const App = () => {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <GameProvider initialColor={gameConfig.color} initialDifficulty={gameConfig.difficulty}>
+      <GameProvider initialColor={gameConfig.color} initialDifficulty={gameConfig.difficulty} numAI={gameConfig.numAI}>
         <GameContent playerColor={gameConfig.color} />
       </GameProvider>
     </DndProvider>

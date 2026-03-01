@@ -90,34 +90,29 @@ const StartScreen = ({ onStart }) => {
             </span>
           </label>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {[1, 2, 3].map(n => {
-              const available = n === 1;
-              return (
-                <button
-                  key={n}
-                  onClick={() => available && setNumAI(n)}
-                  title={available ? '' : 'Coming soon'}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    borderRadius: '8px',
-                    border: numAI === n ? '2px solid #1b5e20' : '1px solid #ddd',
-                    background: numAI === n ? '#e8f5e9' : available ? '#fff' : '#f9f9f9',
-                    cursor: available ? 'pointer' : 'default',
-                    fontSize: '13px',
-                    fontFamily: 'sans-serif',
-                    color: !available ? '#bbb' : numAI === n ? '#1b5e20' : '#444',
-                    fontWeight: numAI === n ? 'bold' : 'normal',
-                    position: 'relative',
-                  }}
-                >
-                  {n === 1 ? '1v1' : n === 2 ? '1v2' : '1v3'}
-                  <div style={{ fontSize: '10px', fontWeight: 'normal', marginTop: '2px', color: available ? '#888' : '#ccc' }}>
-                    {available ? `${n} AI opponent` : 'coming soon'}
-                  </div>
-                </button>
-              );
-            })}
+            {[1, 2, 3].map(n => (
+              <button
+                key={n}
+                onClick={() => setNumAI(n)}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '8px',
+                  border: numAI === n ? '2px solid #1b5e20' : '1px solid #ddd',
+                  background: numAI === n ? '#e8f5e9' : '#fff',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontFamily: 'sans-serif',
+                  color: numAI === n ? '#1b5e20' : '#444',
+                  fontWeight: numAI === n ? 'bold' : 'normal',
+                }}
+              >
+                {n === 1 ? '1v1' : n === 2 ? '1v2' : '1v3'}
+                <div style={{ fontSize: '10px', fontWeight: 'normal', marginTop: '2px', color: '#888' }}>
+                  {n} AI opponent{n > 1 ? 's' : ''}
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
