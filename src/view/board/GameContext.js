@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { observe, clearTurnActions } from './Game';
+import { observe, clearTurnActions, resetGame as resetGameModule } from './Game';
 
 const TREE_SIZE = { 'seed': 0, 'tree-small': 1, 'tree-medium': 2, 'tree-large': 3 };
 const SHADOW_RANGE = { 'tree-small': 1, 'tree-medium': 2, 'tree-large': 3 };
@@ -78,7 +78,7 @@ export const GameProvider = ({ children }) => {
   const [boardState, setBoardState] = useState({});
   const [piecesInInventory, setPiecesInInventory] = useState({});
   const [piecesAvailable, setPiecesAvailable] = useState({});
-  const [lp, setLp] = useState(20);
+  const [lp, setLp] = useState(0);
   const [score, setScore] = useState(0);
   const [sunPosition, setSunPosition] = useState(0);
   const [sunRevolutions, setSunRevolutions] = useState(0);
@@ -152,6 +152,21 @@ export const GameProvider = ({ children }) => {
     }
   }, [sunPosition, boardState, sunRevolutions]);
 
+  const resetGame = useCallback(() => {
+    setLp(0);
+    setScore(0);
+    setSunPosition(0);
+    setSunRevolutions(0);
+    setShadowedSquares(new Set());
+    setVisualShadowedSquares(new Set());
+    setLastLpGained(null);
+    setLastTurnScores({});
+    setIsSetupComplete(false);
+    setScorePiles([[22,21,20],[19,18,18,17,17],[16,16,14,14,13,13],[14,14,13,13,13,12,12,12,12]]);
+    setIsGameOver(false);
+    resetGameModule();
+  }, []);
+
   return (
     <GameContext.Provider value={{
       boardState,
@@ -170,6 +185,7 @@ export const GameProvider = ({ children }) => {
       sunRevolutions,
       scorePiles,
       isGameOver,
+      resetGame,
     }}>
       {children}
     </GameContext.Provider>

@@ -386,4 +386,15 @@ function initializeInventory() {
   for (let i = 0; i < 2; i++) { piecesInInventory[id] = { type: 'tree-large', position: i + 11 }; id++; }
 }
 
+export function resetGame() {
+  boardState = {};
+  piecesInInventory = {};
+  piecesAvailable = {};
+  setupTreesPlaced = 0;
+  activatedSquaresThisTurn = new Set();
+  scorePiles = SCORE_PILES_INIT.map(p => [...p]);
+  initializeInventory();
+  emitChange();
+}
+
 initializeInventory();

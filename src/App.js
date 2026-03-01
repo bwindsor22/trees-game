@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { DndProvider } from "react-dnd";
 import HTML5Backend from "react-dnd-html5-backend";
 import Board from "./view/board/Board";
 import Inventory from "./view/inventory/index";
 import Available from "./view/available/index";
 import CollectArea from "./view/board/CollectArea";
+import Tutorial from "./view/Tutorial";
 import { GameProvider, useGameState } from "./view/board/GameContext";
 import { Container, Row, Col } from "react-bootstrap";
 
@@ -21,13 +22,23 @@ const GameContent = () => {
     lastLpGained,
     isSetupComplete,
     isGameOver,
+    resetGame,
   } = useGameState();
+
+  const [showTutorial, setShowTutorial] = useState(true);
 
   return (
     <Container>
+      {showTutorial && <Tutorial onDone={() => setShowTutorial(false)} />}
       <Row className="mb-4">
         <Col md={8}>
-          <h2>Game Board</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h2 style={{ margin: 0 }}>Game Board</h2>
+            <button
+              onClick={() => setShowTutorial(v => !v)}
+              style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', border: '1px solid #ccc', background: '#fff', cursor: 'pointer', color: '#666' }}
+            >? How to Play</button>
+          </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
             <CollectArea />
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -75,6 +86,13 @@ const GameContent = () => {
               <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1b5e20', borderTop: '1px solid #a5d6a7', paddingTop: '6px', marginTop: '6px' }}>
                 Total: {score + Math.floor(lp / 3)} pts
               </div>
+              <button
+                onClick={resetGame}
+                style={{
+                  marginTop: '10px', fontSize: '13px', padding: '5px 16px', borderRadius: '8px',
+                  border: 'none', background: '#2e7d32', color: '#fff', cursor: 'pointer', fontWeight: 'bold',
+                }}
+              >🌱 Play Again</button>
             </div>
           )}
 
