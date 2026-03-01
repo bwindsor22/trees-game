@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import leaf1 from './board/images/1-leaf.jpg';
 import leaf2 from './board/images/2-leaf.jpg';
+import leaf3 from './board/images/3-leaf.jpg';
+import leaf4 from './board/images/4-leaf.jpg';
 import seedImage from './board/images/seed.png';
 import treeSmallImage from './board/images/tree-small.png';
 import treeMediumImage from './board/images/tree-medium.png';
@@ -245,29 +247,27 @@ const STEPS = [
     diagram: (
       <DiagramBox>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontFamily: 'sans-serif', fontSize: '11px', flexWrap: 'wrap' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '22px' }}>🍀</div>
-            <div style={{ color: '#1b5e20', fontWeight: 'bold' }}>22–20 pts</div>
-            <div style={{ color: '#888' }}>Center</div>
-          </div>
-          <div style={{ fontSize: '18px', color: '#aaa' }}>→</div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '22px' }}>🍃</div>
-            <div style={{ color: '#2e7d32', fontWeight: 'bold' }}>19–17 pts</div>
-            <div style={{ color: '#888' }}>Ring 2</div>
-          </div>
-          <div style={{ fontSize: '18px', color: '#aaa' }}>→</div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '22px' }}>🌿</div>
-            <div style={{ color: '#388e3c', fontWeight: 'bold' }}>16–13 pts</div>
-            <div style={{ color: '#888' }}>Ring 3</div>
-          </div>
-          <div style={{ fontSize: '18px', color: '#aaa' }}>→</div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '22px' }}>🍂</div>
-            <div style={{ color: '#689f38', fontWeight: 'bold' }}>14–12 pts</div>
-            <div style={{ color: '#888' }}>Outer</div>
-          </div>
+          {[
+            [leaf4, '22–20 pts', 'Center'],
+            [leaf3, '19–17 pts', 'Ring 2'],
+            [leaf2, '16–13 pts', 'Ring 3'],
+            [leaf1, '14–12 pts', 'Outer'],
+          ].map(([img, pts, label], i) => (
+            <React.Fragment key={label}>
+              {i > 0 && <div style={{ fontSize: '18px', color: '#aaa' }}>→</div>}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  backgroundImage: `url(${img})`,
+                  backgroundSize: 'cover', backgroundPosition: 'center',
+                  margin: '0 auto 4px',
+                  border: '2px solid rgba(0,0,0,0.2)',
+                }} />
+                <div style={{ color: '#1b5e20', fontWeight: 'bold' }}>{pts}</div>
+                <div style={{ color: '#888' }}>{label}</div>
+              </div>
+            </React.Fragment>
+          ))}
         </div>
       </DiagramBox>
     ),
