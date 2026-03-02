@@ -12,14 +12,28 @@ const SHADOW_DIRS = [
 ];
 
 function computeVisualShadows(boardState, sunPosition) {
+  // Same logic as computeLPShadows: only darken cells where a tree actually
+  // loses LP (i.e., caster size >= target size). Pure-empty cells within
+  // shadow range are still darkened so the player can see where shadow falls.
   const [dx, dy] = SHADOW_DIRS[sunPosition];
   const shadowed = new Set();
   Object.entries(boardState).forEach(([key, caster]) => {
     const range = SHADOW_RANGE[caster.type];
     if (!range) return;
     const [cx, cy] = key.split(',').map(Number);
+    const casterSize = TREE_SIZE[caster.type];
     for (let step = 1; step <= range; step++) {
-      shadowed.add(`${cx + dx * step},${cy + dy * step}`);
+      const targetKey = `${cx + dx * step},${cy + dy * step}`;
+      const target = boardState[targetKey];
+      // If the cell has a tree, only shadow it if caster is >= target size
+      if (target && TREE_SIZE[target.type] !== undefined) {
+        if (TREE_SIZE[target.type] <= casterSize) {
+          shadowed.add(targetKey);
+        }
+      } else {
+        // Empty cells within shadow range are still shown as shadowed
+        shadowed.add(targetKey);
+      }
     }
   });
   return shadowed;
