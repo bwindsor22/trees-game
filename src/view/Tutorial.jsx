@@ -36,6 +36,7 @@ const Cell = ({ label, shadowed = false, children, size = 52, ring = 1 }) => {
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       border: '2px solid rgba(0,0,0,0.25)',
+      overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
