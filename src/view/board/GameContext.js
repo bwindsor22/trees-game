@@ -108,6 +108,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
   const [shadowedSquares, setShadowedSquares] = useState(new Set());
   const [visualShadowedSquares, setVisualShadowedSquares] = useState(new Set());
   const [lastLpGained, setLastLpGained] = useState(null);
+  const [lastLpGainedAll, setLastLpGainedAll] = useState({});
   const [lastTurnScores, setLastTurnScores] = useState({});
   const [isSetupComplete, setIsSetupComplete] = useState(false);
   const [p1SetupDone, setP1SetupDone] = useState(false);
@@ -211,6 +212,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
           return n;
         });
         setLastLpGained(lpGains.p1 || 0);
+        setLastLpGainedAll({ ...lpGains });
         setLastTurnScores(scores);
         setAiThinking(false);
         return;
@@ -258,6 +260,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
       return n;
     });
     setLastLpGained(lpGains.p1 || 0);
+    setLastLpGainedAll({ ...lpGains });
     setLastTurnScores(scores);
 
     if (newRevolutions >= 3) setIsGameOver(true);
@@ -306,6 +309,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     setShadowedSquares(new Set());
     setVisualShadowedSquares(new Set());
     setLastLpGained(null);
+    setLastLpGainedAll({});
     setLastTurnScores({});
     setIsSetupComplete(false);
     setP1SetupDone(false);
@@ -339,6 +343,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
       visualShadowedSquares,
       endPlayerTurn,
       lastLpGained,
+      lastLpGainedAll,
       lastTurnScores,
       isSetupComplete,
       sunRevolutions,

@@ -39,6 +39,8 @@ const GameContent = ({ playerColor }) => {
     resetGame,
     currentPlayer,
     aiThinking,
+    difficulty,
+    lastLpGainedAll,
   } = useGameState();
 
   const [showTutorial, setShowTutorial] = useState(true);
@@ -133,7 +135,34 @@ const GameContent = ({ playerColor }) => {
               <span style={{ fontSize: '13px', color: '#666' }}>
                 Sun: {sunPosition + 1}/6 · Rev. {sunRevolutions + 1}/3
               </span>
+              <span style={{
+                fontSize: '11px', padding: '2px 7px', borderRadius: '4px',
+                background: difficulty === 'easy' ? '#e8f5e9' : difficulty === 'hard' ? '#fff3e0' : '#f3e5f5',
+                color: difficulty === 'easy' ? '#2e7d32' : difficulty === 'hard' ? '#e65100' : '#6a1b9a',
+                border: '1px solid currentColor', fontWeight: 'bold',
+              }}>
+                {difficulty === 'easy' ? '🌱 Easy' : difficulty === 'hard' ? '🏆 Hard' : '🌳 Med'}
+              </span>
             </div>
+
+            {/* Round summary */}
+            {Object.keys(lastLpGainedAll).length > 0 && isSetupComplete && (
+              <div style={{
+                fontSize: '12px', color: '#555', padding: '4px 8px',
+                background: '#f9f9f9', borderRadius: '6px', border: '1px solid #e0e0e0',
+                marginBottom: '6px', fontFamily: 'sans-serif',
+              }}>
+                <span style={{ color: '#888', marginRight: 6 }}>Last round:</span>
+                <span style={{ color: '#388e3c', marginRight: 6 }}>
+                  You +{lastLpGainedAll.p1 || 0} LP
+                </span>
+                {aiPlayers.map((p, i) => (
+                  <span key={p} style={{ color: '#1565c0', marginRight: 6 }}>
+                    AI {i + 1} +{lastLpGainedAll[p] || 0} LP
+                  </span>
+                ))}
+              </div>
+            )}
 
           </div>
 
