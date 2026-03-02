@@ -10,7 +10,7 @@ const COLORS = [
 const DIFFICULTY_INFO = {
   easy:   { label: 'Easy',   emoji: '🌱', desc: 'AI picks from top moves randomly. Good for learning.' },
   medium: { label: 'Medium', emoji: '🌳', desc: 'AI always picks the best immediate move.' },
-  hard:   { label: 'Hard',   emoji: '🏆', desc: 'AI looks 2 moves ahead. A real challenge.' },
+  hard:   { label: 'Hard',   emoji: '⚔️', desc: 'AI looks 4 moves ahead. A real challenge.' },
 };
 
 const StartScreen = ({ onStart }) => {

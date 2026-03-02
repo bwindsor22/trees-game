@@ -36,6 +36,7 @@ const GameContent = ({ playerColor }) => {
     lastLpGained,
     isSetupComplete,
     isGameOver,
+    isFinalRound,
     resetGame,
     currentPlayer,
     aiThinking,
@@ -100,6 +101,17 @@ const GameContent = ({ playerColor }) => {
             </div>
           )}
 
+          {/* Final round banner */}
+          {isFinalRound && !isGameOver && (
+            <div style={{
+              background: '#fff3e0', border: '2px solid #f57c00', borderRadius: '8px',
+              padding: '8px 12px', marginTop: '12px', marginBottom: '8px', fontSize: '13px',
+              color: '#e65100', fontWeight: 'bold', textAlign: 'center',
+            }}>
+              🌅 Final Round! Everyone takes one last turn.
+            </div>
+          )}
+
           {/* Setup banner */}
           {!isSetupComplete && !isGameOver && (
             <div style={{
@@ -132,8 +144,8 @@ const GameContent = ({ playerColor }) => {
               >
                 {aiThinking ? '🤖 AI thinking…' : '☀️ End My Turn'}
               </button>
-              <span style={{ fontSize: '13px', color: '#666' }}>
-                Sun: {sunPosition + 1}/6 · Rev. {sunRevolutions + 1}/3
+              <span style={{ fontSize: '13px', color: isFinalRound ? '#e65100' : '#666' }}>
+                Sun: {sunPosition + 1}/6 · Rev. {sunRevolutions + 1}/3{isFinalRound ? ' · Final!' : ''}
               </span>
               <span style={{
                 fontSize: '11px', padding: '2px 7px', borderRadius: '4px',
@@ -141,7 +153,7 @@ const GameContent = ({ playerColor }) => {
                 color: difficulty === 'easy' ? '#2e7d32' : difficulty === 'hard' ? '#e65100' : '#6a1b9a',
                 border: '1px solid currentColor', fontWeight: 'bold',
               }}>
-                {difficulty === 'easy' ? '🌱 Easy' : difficulty === 'hard' ? '🏆 Hard' : '🌳 Med'}
+                {difficulty === 'easy' ? '🌱 Easy' : difficulty === 'hard' ? '⚔️ Hard' : '🌳 Med'}
               </span>
             </div>
 

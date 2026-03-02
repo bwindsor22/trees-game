@@ -201,8 +201,12 @@ function getValidMoves(state, player) {
 
 // ─── evaluation ───────────────────────────────────────────────────────────────
 
-const RING_BONUS = [4, 3, 2, 1]; // center → outer
-const TREE_VALUE = { seed: 0.3, 'tree-small': 1, 'tree-medium': 2.2, 'tree-large': 4 };
+// Ring 0 = center, ring 3 = outer
+const RING_BONUS = [6, 4.5, 2.5, 1]; // center → outer (increased to value positioning more)
+const TREE_VALUE = { seed: 0.2, 'tree-small': 1.5, 'tree-medium': 3.2, 'tree-large': 7 };
+// LP earned per unshadowed turn (approximated: center trees face less shadowing)
+const LP_INCOME = { 'tree-small': 1, 'tree-medium': 2, 'tree-large': 3 };
+const RING_SHADOW_RESIST = [0.9, 0.75, 0.5, 0.3]; // center trees less likely to be shadowed
 
 function evaluate(state, aiPlayer = 'p2') {
   const aiScore = state.scores[aiPlayer] || 0;
@@ -210,16 +214,19 @@ function evaluate(state, aiPlayer = 'p2') {
   const opponents = Object.keys(state.scores).filter(p => p !== aiPlayer);
   const avgOppScore = opponents.length ? opponents.reduce((s, p) => s + (state.scores[p] || 0), 0) / opponents.length : 0;
   const avgOppLp = opponents.length ? opponents.reduce((s, p) => s + (state.lp[p] || 0), 0) / opponents.length : 0;
-  // Score delta
-  let score = (aiScore - avgOppScore) * 12;
-  // LP delta (converts 3:1 at game end)
-  score += (Math.floor(aiLp / 3) - Math.floor(avgOppLp / 3)) * 2;
-  // Board position: weighted by ring and tree size
+  // Score delta (each scoring token is 12-22 pts, weight heavily)
+  let score = (aiScore - avgOppScore) * 15;
+  // LP delta (converts 3:1 at game end; also value raw LP for making moves)
+  score += (Math.floor(aiLp / 3) - Math.floor(avgOppLp / 3)) * 3;
+  score += aiLp * 0.4; // having LP = options
+  // Board position: tree value + LP earning potential
   for (const [key, piece] of Object.entries(state.boardState)) {
     const [x, y] = key.split(',').map(Number);
     const ring = Math.min(3, Math.round(hexDist(x, y, 0, 0)));
-    const val = RING_BONUS[ring] * (TREE_VALUE[piece.type] || 0);
-    score += piece.owner === aiPlayer ? val : -val;
+    const treeVal = RING_BONUS[ring] * (TREE_VALUE[piece.type] || 0);
+    const lpPotential = (LP_INCOME[piece.type] || 0) * RING_SHADOW_RESIST[ring];
+    const val = treeVal + lpPotential;
+    score += piece.owner === aiPlayer ? val : -val * 0.85;
   }
   return score;
 }
@@ -263,7 +270,7 @@ function bestMoveAtDepth(state, player, depth, aiPlayer) {
  * @param {string} aiPlayer    which player the AI is controlling (default 'p2')
  */
 export function executeAITurn(lpState, scoreState, difficulty, aiPlayer = 'p2') {
-  const depth = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
+  const depth = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 4; // hard: deeper search
 
   // Build simulation state from live Game.js state
   const live = getBoardState();
@@ -281,8 +288,9 @@ export function executeAITurn(lpState, scoreState, difficulty, aiPlayer = 'p2') 
   setCurrentPlayer(aiPlayer);
   clearTurnActions();
 
-  let maxMoves = 8; // safety cap per turn
-  while (maxMoves-- > 0) {
+  const maxMoves = difficulty === 'hard' ? 10 : 8; // hard: more moves per turn
+  let movesLeft = maxMoves;
+  while (movesLeft-- > 0) {
     let move;
     if (difficulty === 'easy') {
       const moves = getValidMoves(state, aiPlayer);
@@ -298,7 +306,10 @@ export function executeAITurn(lpState, scoreState, difficulty, aiPlayer = 'p2') 
     if (difficulty !== 'easy') {
       const currentScore = evaluate(state, aiPlayer);
       const nextState = applyMove(state, move, aiPlayer);
-      if (evaluate(nextState, aiPlayer) <= currentScore) break;
+      const nextScore = evaluate(nextState, aiPlayer);
+      // Hard: allow moves that don't worsen by more than 0.5 (allows setup moves)
+      const threshold = difficulty === 'hard' ? -0.5 : 0;
+      if (nextScore < currentScore + threshold) break;
     }
 
     // Execute in the real Game.js module

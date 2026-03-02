@@ -114,6 +114,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
   const [p1SetupDone, setP1SetupDone] = useState(false);
   const [scorePiles, setScorePiles] = useState([[22,21,20],[19,18,18,17,17],[16,16,14,14,13,13],[14,14,13,13,13,12,12,12,12]]);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [isFinalRound, setIsFinalRound] = useState(false);
   const [currentPlayer, setCurrentPlayerState] = useState('p1');
   const [aiThinking, setAiThinking] = useState(false);
   const [difficulty, setDifficulty] = useState(initialDifficulty);
@@ -263,7 +264,8 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     setLastLpGainedAll({ ...lpGains });
     setLastTurnScores(scores);
 
-    if (newRevolutions >= 3) setIsGameOver(true);
+    // After 3 revolutions: trigger final round (everyone plays once more, then game over)
+    if (newRevolutions >= 3) setIsFinalRound(true);
   }, []);
 
   // Human ends their lifecycle turn → run each AI player in sequence → sun advances
@@ -273,10 +275,16 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
 
     function runAIChain(idx) {
       if (idx >= aiPlayers.length) {
-        // All AI done — advance sun
         setCurrentPlayer('p1');
         setCurrentPlayerState('p1');
         clearTurnActions();
+        if (isFinalRound) {
+          // Final round is over — end the game
+          setIsGameOver(true);
+          setAiThinking(false);
+          return;
+        }
+        // Advance sun and photosynthesis for next round
         const liveAfter = getBoardState();
         advanceSunAndPhotosynthesis(liveAfter.boardState, sunPosition, sunRevolutions);
         setCurrentPlayerState('p1');
@@ -298,7 +306,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     }
 
     runAIChain(0);
-  }, [difficulty, sunPosition, sunRevolutions, advanceSunAndPhotosynthesis, aiPlayers]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [difficulty, sunPosition, sunRevolutions, isFinalRound, advanceSunAndPhotosynthesis, aiPlayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetGame = useCallback(() => {
     const zeroed = Object.fromEntries(playerListRef.current.map(p => [p, 0]));
@@ -312,6 +320,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     setLastLpGainedAll({});
     setLastTurnScores({});
     setIsSetupComplete(false);
+    setIsFinalRound(false);
     setP1SetupDone(false);
     setScorePiles([[22,21,20],[19,18,18,17,17],[16,16,14,14,13,13],[14,14,13,13,13,12,12,12,12]]);
     setIsGameOver(false);
@@ -349,6 +358,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
       sunRevolutions,
       scorePiles,
       isGameOver,
+      isFinalRound,
       resetGame,
       currentPlayer,
       aiThinking,
