@@ -1,1 +1,1 @@
-timestamp	phase	total_games	total_samples	loss	mae	vs_medium_w	vs_medium_l	vs_medium_d	vs_medium_pct	vs_hard_w	vs_hard_l	vs_hard_d	vs_hard_pct	vs_expert_w	vs_expert_l	vs_expert_d	vs_expert_pct
+timestamp	phase	total_games	total_samples	loss	mae	vs_easy_w	vs_easy_l	vs_easy_d	vs_easy_pct	vs_medium_w	vs_medium_l	vs_medium_d	vs_medium_pct	vs_hard_w	vs_hard_l	vs_hard_d	vs_hard_pct	vs_expert_w	vs_expert_l	vs_expert_d	vs_expert_pct

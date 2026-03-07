@@ -5,33 +5,25 @@
  * Training strategy:
  *   Phase 1a — Expert-game warm-up (200 games):
  *     Expert plays both sides; each state is labelled with the FINAL game
- *     outcome (score diff / OUTCOME_NORM → ≈[-1,1]).  Same label distribution
- *     as Phase 1b — no catastrophic forgetting when RL starts.
+ *     outcome (score diff / OUTCOME_NORM → ≈[-1,1]).
  *
- *   Phase 1b — Self-play RL (1,200 games = ~45,000 samples):
- *     Expert vs NN, alternating which side NN plays.
- *     Labels: final game outcome (score diff, normalized).
- *     Benchmarks every 150 games vs medium / hard / expert.
+ *   Phase 1b — NN-vs-NN self-play (1,200 games = ~45,600 samples):
+ *     NN plays both sides so the value function is calibrated to its OWN play,
+ *     not to expert play.  Labels: final score diff (normalised).
+ *     Benchmarks every 150 games vs easy / medium / hard / expert.
  *
- * Total samples: ~53,000 (> 50,000 target)
- * Target:
- *   NN+depth-2 vs medium  → win rate > 70%
- *   NN+depth-2 vs hard    → win rate > 55%
- *   NN+depth-2 vs expert  → win rate > 40%  (beats expert heuristic with less search depth)
- *
- * Action coordinates: uses (x/6, y/3) normalized coordinates (not angles).
+ * Total samples: ~53,200 (> 50,000 target)
  *
  * Run with:
  *   PATH=/opt/homebrew/bin:$PATH node src/AI/nn_trainer_tf.js
  */
 
-// Shim util.isNullOrUndefined — removed from Node.js 22+ but still used by
-// @tensorflow/tfjs-node. Patch before requiring tfjs-node so it gets the shim.
+// Shim util.isNullOrUndefined — removed in Node.js 22+ but needed by tfjs-node.
 const _util = require('util');
 if (typeof _util.isNullOrUndefined !== 'function') {
   _util.isNullOrUndefined = (v) => v === null || v === undefined;
 }
-const tf = require('@tensorflow/tfjs-node');
+const tf   = require('@tensorflow/tfjs-node');
 const fs   = require('fs');
 const path = require('path');
 
@@ -40,48 +32,46 @@ const {
   doPlace, doHarvest, doBuy,
   applyMove, getValidMoves,
   evaluate, evaluateExpert,
-  bestMoveWithEval, MAX_CANDIDATES,
+  runTurnWithEval,
 } = require('./sim_core');
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
-const MODEL_DIR        = path.resolve(__dirname, '../../public/nn_model');
-const LOG_FILE         = path.resolve(__dirname, 'nn_training_log.md');
-const TSV_FILE         = path.resolve(__dirname, 'nn_training_data.tsv');
-const FEATURE_DIM      = 68;
+const MODEL_DIR   = path.resolve(__dirname, '../../public/nn_model');
+const LOG_FILE    = path.resolve(__dirname, 'nn_training_log.md');
+const TSV_FILE    = path.resolve(__dirname, 'nn_training_data.tsv');
+const FEATURE_DIM = 68;
 
-// Phase 1a: supervised distillation
-const SUPERVISED_GAMES = 200;
-// Phase 1b: RL self-play (split into batches, benchmarked periodically)
-const RL_TOTAL_GAMES   = 1200;
-const RL_BATCH_SIZE    = 150;    // games per RL iteration before re-training
-const BENCHMARK_GAMES  = 20;    // games per difficulty in each benchmark run
+const SUPERVISED_GAMES  = 200;
+const RL_TOTAL_GAMES    = 1200;
+const RL_BATCH_SIZE     = 150;
+const BENCHMARK_GAMES   = 20;   // games per difficulty per benchmark
 
-const EPOCHS_SUPERVISED = 50;
-const EPOCHS_RL         = 40;
+const EPOCHS_SUPERVISED = 100;
+const EPOCHS_RL         = 100;
 const BATCH_SIZE        = 256;
-const REPLAY_MAX        = 50000;
+const REPLAY_MAX        = 55000;
 
-// Outcome normaliser: final score diff / OUTCOME_NORM → ≈[-1,1]
-const OUTCOME_NORM = 30; // typical final score diff: -30..+30
+// Final score diff / OUTCOME_NORM → ≈[-1,1]
+const OUTCOME_NORM = 30;
 
 // ─── Feature extraction (68 dimensions) ───────────────────────────────────────
 //
 // [0:37]  Board cells (ALL_COORDS order):
-//           ai piece → +weight  (seed:0.1, small:0.25, medium:0.5, large:1.0)
-//           opp piece→ -weight
-//           empty    → 0
+//           ai piece  → +weight (seed:0.1, small:0.25, medium:0.5, large:1.0)
+//           opp piece → -weight
+//           empty     →  0
 // [37]    ai_lp / 20
 // [38]    opp_lp / 20
 // [39]    (ai_score - opp_score) / 50
 // [40]    floor(ai_lp/3) / 10  (LP→VP conversion potential)
-// [41:45] AI inventory presence: seed, small, medium, large
-// [45:49] Opp inventory presence
-// [49:53] AI available presence
-// [53:57] Opp available presence
+// [41:45] AI inventory presence flags: seed, small, medium, large
+// [45:49] Opp inventory presence flags
+// [49:53] AI available presence flags
+// [53:57] Opp available presence flags
 // [57:63] Sun position one-hot (6 values)
 // [63]    revolution / 2
-// [64:68] Score pile remaining fraction per ring (0-3)
+// [64:68] Score pile remaining fractions (rings 0-3)
 
 const PIECE_WEIGHT = { seed: 0.1, 'tree-small': 0.25, 'tree-medium': 0.5, 'tree-large': 1.0 };
 const PILE_SIZES   = [3, 5, 6, 9];
@@ -119,7 +109,7 @@ function extractFeatures(state, aiPlayer, sunPos, revolution) {
   const aiAv   = new Set(Object.values(state.available[aiPlayer]   || {}).map(p => p.type));
   const oppAv  = new Set(oppPlayer ? Object.values(state.available[oppPlayer]  || {}).map(p => p.type) : []);
   for (let i = 0; i < 4; i++) {
-    features[41 + i] = aiInv.has(STAGES[i])  ? 1 : 0;
+    features[41 + i] = aiInv.has(STAGES[i]) ? 1 : 0;
     features[45 + i] = oppInv.has(STAGES[i]) ? 1 : 0;
     features[49 + i] = aiAv.has(STAGES[i])   ? 1 : 0;
     features[53 + i] = oppAv.has(STAGES[i])  ? 1 : 0;
@@ -138,12 +128,8 @@ function extractFeatures(state, aiPlayer, sunPos, revolution) {
 
 // ─── Neural network ────────────────────────────────────────────────────────────
 //
-// Architecture: 68 → Dense(128,relu) → Dropout(0.1) → Dense(64,relu)
-//             → Dense(32,relu) → Dense(1,linear)
-//
-// Output: predicted position value in [-1,1], where:
-//   +1 = certain win (AI score >> opponent)
-//   -1 = certain loss
+// 68 → Dense(128,relu) → Dropout(0.1) → Dense(64,relu) → Dense(32,relu) → Dense(1,linear)
+// Output in [-1,1]: +1 = win, -1 = loss
 
 function createModel() {
   const model = tf.sequential({ layers: [
@@ -158,86 +144,37 @@ function createModel() {
   return model;
 }
 
-// ─── NN inference (synchronous batch) ─────────────────────────────────────────
+// ─── NN inference ─────────────────────────────────────────────────────────────
 
-/**
- * Evaluate an array of states in one TF.js batch call.
- * Returns an array of raw scores scaled to ~[-200, 200] (same units as evaluate()).
- */
+/** Batch-evaluate an array of states. Returns scores in [-OUTCOME_NORM, +OUTCOME_NORM]. */
 function nnBatchEval(model, states, aiPlayer, sunPos, revolution) {
   if (!states.length) return [];
   const matrix = states.map(s => Array.from(extractFeatures(s, aiPlayer, sunPos, revolution)));
   return tf.tidy(() => {
-    const input  = tf.tensor2d(matrix, [matrix.length, FEATURE_DIM]);
-    const output = model.predict(input);
-    // Scale normalized output back to score-like units for minimax comparison
-    return Array.from(output.dataSync()).map(v => v * OUTCOME_NORM);
+    const out = model.predict(tf.tensor2d(matrix, [matrix.length, FEATURE_DIM]));
+    return Array.from(out.dataSync()).map(v => v * OUTCOME_NORM);
   });
 }
 
-
 // ─── AI turn runners ──────────────────────────────────────────────────────────
 
-/** Run one expert (heuristic) AI turn on the live game state. */
-function runExpertTurn(game, player, depth = 2) {
-  game.activatedThisTurn = new Set();
-  let state = {
-    boardState:  { ...game.boardState },
-    inventories: Object.fromEntries(Object.entries(game.inventories).map(([p, inv]) => [p, { ...inv }])),
-    available:   Object.fromEntries(Object.entries(game.available).map(([p, av]) => [p, { ...av }])),
-    lp:          { ...game.lp },
-    scores:      { ...game.scores },
-    scorePiles:  game.scorePiles.map(p => [...p]),
-    activated:   new Set(),
-    setupDone:   true,
-  };
-  const evalFn = evaluateExpert;
-  let movesLeft = 12;
-  while (movesLeft-- > 0) {
-    const move = bestMoveWithEval(state, player, depth, player, game.sunPos, evalFn);
-    if (!move) break;
-    const cur = evalFn(state, player, game.sunPos);
-    const nxt = evalFn(applyMove(state, move, player), player, game.sunPos);
-    if (nxt < cur) break;
-    if (move.action === 'harvest') doHarvest(game, player, move.pieceId);
-    else if (move.action === 'buy') doBuy(game, player, move.pieceId, move.toPosition);
-    else doPlace(game, player, move.pieceId, move.toX, move.toY, move.from);
-    state = applyMove(state, move, player);
-  }
-}
-
-/** Run one basic-eval (medium/hard) AI turn on the live game state. */
-function runBasicTurn(game, player, depth = 2) {
-  game.activatedThisTurn = new Set();
-  let state = {
-    boardState:  { ...game.boardState },
-    inventories: Object.fromEntries(Object.entries(game.inventories).map(([p, inv]) => [p, { ...inv }])),
-    available:   Object.fromEntries(Object.entries(game.available).map(([p, av]) => [p, { ...av }])),
-    lp:          { ...game.lp },
-    scores:      { ...game.scores },
-    scorePiles:  game.scorePiles.map(p => [...p]),
-    activated:   new Set(),
-    setupDone:   true,
-  };
-  const evalFn = evaluate;
-  let movesLeft = 12;
-  while (movesLeft-- > 0) {
-    const move = bestMoveWithEval(state, player, depth, player, game.sunPos, evalFn);
-    if (!move) break;
-    const cur = evalFn(state, player, game.sunPos);
-    const nxt = evalFn(applyMove(state, move, player), player, game.sunPos);
-    if (nxt < cur) break;
-    if (move.action === 'harvest') doHarvest(game, player, move.pieceId);
-    else if (move.action === 'buy') doBuy(game, player, move.pieceId, move.toPosition);
-    else doPlace(game, player, move.pieceId, move.toX, move.toY, move.from);
-    state = applyMove(state, move, player);
-  }
-}
-
-/** Run one NN AI turn on the live game state (depth 2, batch leaf eval). */
+/**
+ * NN turn using the same runTurnWithEval infrastructure as expert/basic.
+ * Stopping logic is identical to expert: stop when the best available move
+ * makes the eval decrease.  Single-state evals — no subtle batch-indexing bugs.
+ */
 function runNNTurn(game, player, model) {
+  const rev = game.revolutions || 0;
+  runTurnWithEval(game, player, 2,
+    (state, p, sp) => nnBatchEval(model, [state], p, sp, rev)[0]);
+}
+
+/**
+ * Random AI: picks a uniformly random legal move each iteration until LP runs
+ * out.  Used as the "easy" benchmark baseline.
+ */
+function runRandomTurn(game, player) {
   game.activatedThisTurn = new Set();
-  const revolution = game.revolutions || 0;
   let state = {
     boardState:  { ...game.boardState },
     inventories: Object.fromEntries(Object.entries(game.inventories).map(([p, inv]) => [p, { ...inv }])),
@@ -248,79 +185,21 @@ function runNNTurn(game, player, model) {
     activated:   new Set(),
     setupDone:   true,
   };
-
-  // Depth-2 with batch leaf evaluation for efficiency:
-  // generate all depth-1 candidates, for each get best depth-2 follow-up,
-  // evaluate all depth-2 leaf states in one batch call.
   let movesLeft = 12;
   while (movesLeft-- > 0) {
     const moves = getValidMoves(state, player);
     if (!moves.length) break;
-
-    // Prune to MAX_CANDIDATES at depth-1 using a quick single-state eval
-    let candidates = moves;
-    if (candidates.length > MAX_CANDIDATES) {
-      const d1States = candidates.map(m => applyMove(state, m, player));
-      const d1Scores = nnBatchEval(model, d1States, player, game.sunPos, revolution);
-      const indexed  = candidates.map((m, i) => ({ m, s: d1Scores[i], st: d1States[i] }));
-      indexed.sort((a, b) => b.s - a.s);
-      candidates = indexed.slice(0, MAX_CANDIDATES).map(x => x.m);
-    }
-
-    // For each candidate, find best depth-2 follow-up and evaluate
-    const leafStates  = [];
-    const candidateD1 = [];
-    for (const move of candidates) {
-      const d1State  = applyMove(state, move, player);
-      const d2Moves  = getValidMoves(d1State, player);
-      if (!d2Moves.length) {
-        leafStates.push(d1State);
-        candidateD1.push({ move, leafIdx: leafStates.length - 1 });
-      } else {
-        // Quick pick: best d2 move by single NN eval (batch all)
-        const d2Candidates = d2Moves.slice(0, MAX_CANDIDATES);
-        const d2States     = d2Candidates.map(m => applyMove(d1State, m, player));
-        d2States.forEach(s => leafStates.push(s));
-        candidateD1.push({ move, d2Start: leafStates.length - d2States.length, d2Len: d2States.length });
-      }
-    }
-
-    const allScores = nnBatchEval(model, leafStates, player, game.sunPos, revolution);
-
-    let bestMove = null, bestScore = -Infinity;
-    for (const item of candidateD1) {
-      let sc;
-      if (item.leafIdx !== undefined) {
-        sc = allScores[item.leafIdx];
-      } else {
-        // Best d2 score among the range
-        sc = -Infinity;
-        for (let i = item.d2Start; i < item.d2Start + item.d2Len; i++) {
-          if (allScores[i] > sc) sc = allScores[i];
-        }
-      }
-      if (sc > bestScore) { bestScore = sc; bestMove = item.move; }
-    }
-
-    if (!bestMove) break;
-
-    // Stop if best available move makes things worse
-    const currentScore = nnBatchEval(model, [state], player, game.sunPos, revolution)[0];
-    if (bestScore < currentScore - 5) break; // tolerance of 5 units (≈ 0.025 normalized)
-
-    if (bestMove.action === 'harvest') doHarvest(game, player, bestMove.pieceId);
-    else if (bestMove.action === 'buy') doBuy(game, player, bestMove.pieceId, bestMove.toPosition);
-    else doPlace(game, player, bestMove.pieceId, bestMove.toX, bestMove.toY, bestMove.from);
-    state = applyMove(state, bestMove, player);
+    const move = moves[Math.floor(Math.random() * moves.length)];
+    if      (move.action === 'harvest') doHarvest(game, player, move.pieceId);
+    else if (move.action === 'buy')     doBuy(game, player, move.pieceId, move.toPosition);
+    else                                doPlace(game, player, move.pieceId, move.toX, move.toY, move.from);
+    state = applyMove(state, move, player);
   }
 }
 
 // ─── Full game runner ─────────────────────────────────────────────────────────
 
-/**
- * Run a complete game and return scores.
- * p1Config/p2Config: { type: 'expert'|'basic'|'nn', depth?: number, model?: tf.Model }
- */
+/** p1Config/p2Config: { type: 'expert'|'basic'|'nn'|'random', depth?, model? } */
 function runGame(p1Config, p2Config) {
   const players = ['p1', 'p2'];
   const game    = createGame(players);
@@ -330,15 +209,15 @@ function runGame(p1Config, p2Config) {
   for (let cycle = 0; cycle < 19; cycle++) {
     const revolution   = Math.floor(cycle / 6);
     const isFinalRound = cycle === 18;
-    const offset       = revolution % 2;
-    const order        = offset === 0 ? players : [...players].reverse();
+    const order        = revolution % 2 === 0 ? players : [...players].reverse();
 
     for (const player of order) {
       const cfg = player === 'p1' ? p1Config : p2Config;
       game.revolutions = revolution;
-      if (cfg.type === 'expert')     runExpertTurn(game, player, cfg.depth ?? 2);
-      else if (cfg.type === 'basic') runBasicTurn(game, player, cfg.depth ?? 2);
-      else if (cfg.type === 'nn')    runNNTurn(game, player, cfg.model);
+      if      (cfg.type === 'expert') runTurnWithEval(game, player, cfg.depth ?? 2, evaluateExpert);
+      else if (cfg.type === 'basic')  runTurnWithEval(game, player, cfg.depth ?? 2, evaluate);
+      else if (cfg.type === 'nn')     runNNTurn(game, player, cfg.model);
+      else if (cfg.type === 'random') runRandomTurn(game, player);
     }
 
     if (isFinalRound) break;
@@ -354,33 +233,23 @@ function runGame(p1Config, p2Config) {
 // ─── Data collection ──────────────────────────────────────────────────────────
 
 /**
- * Collect outcome-labelled samples from N expert-vs-expert games.
- * Each state is labelled with the FINAL game score differential (normalised).
- * This is identical in distribution to Phase 1b — no label scale mismatch.
+ * Collect outcome-labelled samples from nGames games.
+ * p1Type / p2Type: 'expert' | 'nn'
+ * nnModel: required when either type is 'nn'
+ *
+ * States are labelled with the final score differential from each player's
+ * perspective, normalised to [-1, 1].
  */
-function collectExpertOutcomeData(nGames) {
-  return collectOutcomeData(nGames, null);
-}
-
-/**
- * Collect training samples from N self-play games (expert-vs-expert or mixed).
- * States are labelled with the final score differential (outcome-based RL).
- * After the first benchmark, the NN plays p2 so it generates exploratory data.
- */
-function collectOutcomeData(nGames, nnModel) {
+function collectData(nGames, p1Type, p2Type, nnModel) {
   const samples = [];
   const players = ['p1', 'p2'];
 
   for (let g = 0; g < nGames; g++) {
-    // First half: expert-vs-expert (clean baseline data)
-    // Second half: NN plays alternating p1/p2 to avoid positional bias
-    const useNN   = (nnModel !== null) && (g >= nGames / 2);
-    const nnIsP1  = (g % 2 === 0); // alternate which side NN plays
-    const game    = createGame(players);
+    const game = createGame(players);
     doSetup(game);
     runPhotosynthesis(game);
 
-    const stateSamples = []; // { features, playerIdx }
+    const stateSamples = [];
 
     for (let cycle = 0; cycle < 19; cycle++) {
       const revolution   = Math.floor(cycle / 6);
@@ -389,8 +258,6 @@ function collectOutcomeData(nGames, nnModel) {
 
       for (const player of order) {
         const pIdx = players.indexOf(player);
-
-        // Record state BEFORE the move
         const simState = {
           boardState:  { ...game.boardState },
           inventories: Object.fromEntries(Object.entries(game.inventories).map(([p, inv]) => [p, { ...inv }])),
@@ -404,9 +271,9 @@ function collectOutcomeData(nGames, nnModel) {
         stateSamples.push({ features: extractFeatures(simState, player, game.sunPos, revolution), playerIdx: pIdx });
 
         game.revolutions = revolution;
-        const isNNPlayer = useNN && ((nnIsP1 && player === 'p1') || (!nnIsP1 && player === 'p2'));
-        if (isNNPlayer) runNNTurn(game, player, nnModel);
-        else            runExpertTurn(game, player, 2);
+        const playerType = player === 'p1' ? p1Type : p2Type;
+        if (playerType === 'nn') runNNTurn(game, player, nnModel);
+        else                     runTurnWithEval(game, player, 2, evaluateExpert);
       }
 
       if (isFinalRound) break;
@@ -415,21 +282,17 @@ function collectOutcomeData(nGames, nnModel) {
       runPhotosynthesis(game);
     }
 
-    // LP conversion
     for (const p of players) game.scores[p] += Math.floor(game.lp[p] / 3);
-
-    // Label all states with outcome from that player's perspective
-    const diff = game.scores.p1 - game.scores.p2; // positive = p1 won
+    const diff = game.scores.p1 - game.scores.p2;
     for (const { features, playerIdx } of stateSamples) {
       const perspective = playerIdx === 0 ? diff : -diff;
-      const target      = Math.max(-1, Math.min(1, perspective / OUTCOME_NORM));
-      samples.push({ features, target });
+      samples.push({ features, target: Math.max(-1, Math.min(1, perspective / OUTCOME_NORM)) });
     }
   }
   return samples;
 }
 
-// ─── Training ──────────────────────────────────────────────────────────────────
+// ─── Training ─────────────────────────────────────────────────────────────────
 
 async function trainModel(model, samples, epochs, label) {
   if (samples.length < BATCH_SIZE) {
@@ -437,33 +300,27 @@ async function trainModel(model, samples, epochs, label) {
     return { loss: 0, mae: 0 };
   }
 
-  // Shuffle in-place (Fisher-Yates)
+  // Fisher-Yates shuffle
   for (let i = samples.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [samples[i], samples[j]] = [samples[j], samples[i]];
   }
 
-  const feats   = samples.map(s => Array.from(s.features));
-  const targets = samples.map(s => [s.target]);
-  const xs = tf.tensor2d(feats,   [samples.length, FEATURE_DIM]);
-  const ys = tf.tensor2d(targets, [samples.length, 1]);
+  const xs = tf.tensor2d(samples.map(s => Array.from(s.features)), [samples.length, FEATURE_DIM]);
+  const ys = tf.tensor2d(samples.map(s => [s.target]),             [samples.length, 1]);
 
   let finalLoss = 0, finalMae = 0;
   await model.fit(xs, ys, {
-    epochs,
-    batchSize: BATCH_SIZE,
-    validationSplit: 0.1,
-    shuffle: true,
-    verbose: 0,
+    epochs, batchSize: BATCH_SIZE, validationSplit: 0.1, shuffle: true, verbose: 0,
     callbacks: {
       onEpochEnd: (epoch, logs) => {
         finalLoss = logs.val_loss ?? logs.loss;
         finalMae  = logs.val_mae  ?? logs.mae;
-        if ((epoch + 1) % 10 === 0) {
-          const lStr = logs.val_loss !== undefined
+        if ((epoch + 1) % 20 === 0) {
+          const s = logs.val_loss !== undefined
             ? `val_loss=${logs.val_loss.toFixed(4)}  val_mae=${logs.val_mae.toFixed(4)}`
             : `loss=${logs.loss.toFixed(4)}  mae=${logs.mae.toFixed(4)}`;
-          process.stdout.write(`    epoch ${String(epoch + 1).padStart(3)}/${epochs}  ${lStr}\n`);
+          process.stdout.write(`    epoch ${String(epoch+1).padStart(3)}/${epochs}  ${s}\n`);
         }
       }
     }
@@ -474,32 +331,30 @@ async function trainModel(model, samples, epochs, label) {
 
 // ─── Benchmark ────────────────────────────────────────────────────────────────
 
-/**
- * Run BENCHMARK_GAMES against each difficulty and return win rates.
- * NN always plays as p2 (half the games) and p1 (other half) for symmetry.
- */
+const DIFFICULTIES = ['easy', 'medium', 'hard', 'expert'];
+
 function runBenchmark(model) {
-  // All opponents at depth 2 for fast training-time benchmarks.
-  // The eval function (basic vs expert) still distinguishes difficulty levels.
-  const configs = {
+  const oppConfigs = {
+    easy:   { type: 'random' },
     medium: { type: 'basic',  depth: 2 },
     hard:   { type: 'basic',  depth: 4 },
     expert: { type: 'expert', depth: 2 },
   };
   const results = {};
 
-  for (const [label, oppCfg] of Object.entries(configs)) {
+  for (const [label, oppCfg] of Object.entries(oppConfigs)) {
     let nnWins = 0, oppWins = 0, draws = 0;
     for (let i = 0; i < BENCHMARK_GAMES; i++) {
       const nnIsP1 = (i % 2 === 0);
-      const p1Cfg  = nnIsP1 ? { type: 'nn', model } : oppCfg;
-      const p2Cfg  = nnIsP1 ? oppCfg : { type: 'nn', model };
-      const { p1, p2 } = runGame(p1Cfg, p2Cfg);
+      const { p1, p2 } = runGame(
+        nnIsP1 ? { type: 'nn', model } : oppCfg,
+        nnIsP1 ? oppCfg : { type: 'nn', model }
+      );
       const nnScore  = nnIsP1 ? p1 : p2;
       const oppScore = nnIsP1 ? p2 : p1;
-      if      (nnScore > oppScore)  nnWins++;
-      else if (oppScore > nnScore)  oppWins++;
-      else                          draws++;
+      if      (nnScore > oppScore) nnWins++;
+      else if (oppScore > nnScore) oppWins++;
+      else                         draws++;
     }
     results[label] = { nnWins, oppWins, draws, nnFrac: nnWins / BENCHMARK_GAMES };
   }
@@ -512,33 +367,27 @@ async function main() {
   console.log(`\n${'═'.repeat(65)}`);
   console.log('  Photosynthesis NN Trainer  —  TensorFlow.js');
   console.log(`  Feature dim: ${FEATURE_DIM}  |  Architecture: ${FEATURE_DIM}→128→64→32→1`);
-  console.log(`  Phase 1a: ${SUPERVISED_GAMES} supervised games  |  Phase 1b: ${RL_TOTAL_GAMES} RL games`);
-  console.log(`  Target samples: ${SUPERVISED_GAMES * 38 + RL_TOTAL_GAMES * 38} (> 50,000)`);
+  console.log(`  Phase 1a: ${SUPERVISED_GAMES} expert games  |  Phase 1b: ${RL_TOTAL_GAMES} NN-vs-NN games`);
+  console.log(`  Target samples: ${(SUPERVISED_GAMES + RL_TOTAL_GAMES) * 38} (> 50,000)`);
   console.log(`${'═'.repeat(65)}\n`);
 
   if (!fs.existsSync(MODEL_DIR)) fs.mkdirSync(MODEL_DIR, { recursive: true });
 
   // TSV header
-  const tsvHeader = [
-    'timestamp', 'phase', 'total_games', 'total_samples', 'loss', 'mae',
-    'vs_medium_w', 'vs_medium_l', 'vs_medium_d', 'vs_medium_pct',
-    'vs_hard_w',   'vs_hard_l',   'vs_hard_d',   'vs_hard_pct',
-    'vs_expert_w', 'vs_expert_l', 'vs_expert_d', 'vs_expert_pct',
-  ].join('\t');
-  fs.writeFileSync(TSV_FILE, tsvHeader + '\n');
+  const tsvCols = ['timestamp', 'phase', 'total_games', 'total_samples', 'loss', 'mae'];
+  for (const d of DIFFICULTIES) tsvCols.push(`vs_${d}_w`, `vs_${d}_l`, `vs_${d}_d`, `vs_${d}_pct`);
+  fs.writeFileSync(TSV_FILE, tsvCols.join('\t') + '\n');
 
-  function writeTSVRow(phase, totalGames, totalSamples, loss, mae, benchmarkResults) {
-    const r = benchmarkResults;
-    const row = [
-      new Date().toISOString(), phase, totalGames, totalSamples,
-      loss.toFixed(6), mae.toFixed(6),
-      r.medium.nnWins, r.medium.oppWins, r.medium.draws, (r.medium.nnFrac * 100).toFixed(1),
-      r.hard.nnWins,   r.hard.oppWins,   r.hard.draws,   (r.hard.nnFrac   * 100).toFixed(1),
-      r.expert.nnWins, r.expert.oppWins, r.expert.draws, (r.expert.nnFrac * 100).toFixed(1),
-    ].join('\t');
-    fs.appendFileSync(TSV_FILE, row + '\n');
+  function writeTSVRow(phase, totalGames, totalSamples, loss, mae, br) {
+    const row = [new Date().toISOString(), phase, totalGames, totalSamples, loss.toFixed(6), mae.toFixed(6)];
+    for (const d of DIFFICULTIES) {
+      const r = br[d];
+      row.push(r.nnWins, r.oppWins, r.draws, (r.nnFrac * 100).toFixed(1));
+    }
+    fs.appendFileSync(TSV_FILE, row.join('\t') + '\n');
   }
 
+  // Load or create model
   let model;
   const modelJsonPath = path.join(MODEL_DIR, 'model.json');
   if (fs.existsSync(modelJsonPath)) {
@@ -553,126 +402,118 @@ async function main() {
   }
 
   const logLines = [
-    `# NN Training Log`,
-    ``,
+    `# NN Training Log`, ``,
     `Started: ${new Date().toISOString()}`,
-    `Feature dim: ${FEATURE_DIM}  |  Arch: ${FEATURE_DIM}→128→64→32→1`,
-    `Phase 1a: ${SUPERVISED_GAMES} expert-outcome games  |  Phase 1b: ${RL_TOTAL_GAMES} RL games (${RL_BATCH_SIZE}/batch)`,
-    ``,
-    `## Phase 1a — Expert games, outcome labels (same distribution as Phase 1b)`,
+    `Arch: ${FEATURE_DIM}→128→64→32→1`,
+    `Phase 1a: ${SUPERVISED_GAMES} expert-vs-expert games`,
+    `Phase 1b: ${RL_TOTAL_GAMES} NN-vs-NN games (${RL_BATCH_SIZE}/batch)`,
+    ``, `## Phase 1a — Expert games, outcome labels`,
   ];
 
   const replayBuffer = [];
   let totalSamples   = 0;
-  let bestNNFrac     = { medium: 0, hard: 0, expert: 0 };
+  let bestNNFrac     = Object.fromEntries(DIFFICULTIES.map(d => [d, 0]));
 
-  // ── Phase 1a: Supervised distillation ─────────────────────────────────────
+  // ── Phase 1a: Expert-outcome warm-up ─────────────────────────────────────
 
-  console.log(`── Phase 1a: Expert-outcome data (${SUPERVISED_GAMES} expert games) ──────────`);
-  const t0 = Date.now();
-  process.stdout.write(`  Generating data... `);
-  const supervisedData = collectExpertOutcomeData(SUPERVISED_GAMES);
-  totalSamples += supervisedData.length;
-  process.stdout.write(`${supervisedData.length} samples in ${((Date.now()-t0)/1000).toFixed(1)}s\n`);
+  console.log(`── Phase 1a: Expert games (${SUPERVISED_GAMES}) ───────────────────────────────`);
+  let t = Date.now();
+  process.stdout.write('  Generating data... ');
+  const phase1aData = collectData(SUPERVISED_GAMES, 'expert', 'expert', null);
+  totalSamples += phase1aData.length;
+  process.stdout.write(`${phase1aData.length} samples in ${((Date.now()-t)/1000).toFixed(1)}s\n`);
+  replayBuffer.push(...phase1aData);
 
   console.log(`  Training (${EPOCHS_SUPERVISED} epochs):`);
-  const t1 = Date.now();
-  const { loss: sLoss, mae: sMae } = await trainModel(model, [...supervisedData], EPOCHS_SUPERVISED, '1a');
-  console.log(`  Done in ${((Date.now()-t1)/1000).toFixed(1)}s  loss=${sLoss.toFixed(4)}  mae=${sMae.toFixed(4)}`);
+  t = Date.now();
+  const { loss: sLoss, mae: sMae } = await trainModel(model, [...phase1aData], EPOCHS_SUPERVISED, '1a');
+  console.log(`  Done in ${((Date.now()-t)/1000).toFixed(1)}s  loss=${sLoss.toFixed(4)}  mae=${sMae.toFixed(4)}\n`);
 
-  // Add supervised samples to replay buffer
-  replayBuffer.push(...supervisedData);
-  if (replayBuffer.length > REPLAY_MAX) replayBuffer.splice(0, replayBuffer.length - REPLAY_MAX);
-
-  // First benchmark after supervised phase
-  console.log(`\n  Benchmark after Phase 1a:`);
+  console.log('  Benchmark after Phase 1a:');
+  t = Date.now();
   const b0 = runBenchmark(model);
+  process.stdout.write(`    ${((Date.now()-t)/1000).toFixed(1)}s  `);
   for (const [d, r] of Object.entries(b0)) {
-    console.log(`    vs ${d.padEnd(6)}: NN ${r.nnWins}W/${r.oppWins}L/${r.draws}D  (${(r.nnFrac*100).toFixed(0)}%)`);
-    logLines.push(`| Phase1a | vs ${d} | ${(r.nnFrac*100).toFixed(0)}% |`);
+    process.stdout.write(`vs ${d}: ${r.nnWins}W/${r.oppWins}L  `);
+    logLines.push(`| Phase1a | vs ${d} | ${r.nnWins}W/${r.oppWins}L/${r.draws}D | ${(r.nnFrac*100).toFixed(0)}% |`);
     bestNNFrac[d] = Math.max(bestNNFrac[d], r.nnFrac);
   }
+  process.stdout.write('\n');
   writeTSVRow('1a', SUPERVISED_GAMES, totalSamples, sLoss, sMae, b0);
 
-  // Save model after Phase 1a
   await model.save(`file://${MODEL_DIR}`);
-  console.log(`  Model saved.\n`);
+  console.log('  Model saved.\n');
 
-  logLines.push('', '## Phase 1b — RL self-play (outcome labels)', '',
-    '| Batch | Games | Samples | Loss | MAE | vs medium | vs hard | vs expert | Saved |',
-    '|-------|-------|---------|------|-----|-----------|---------|-----------|-------|');
+  logLines.push('', '## Phase 1b — NN-vs-NN self-play', '',
+    `| Batch | Games | Samples | Loss | MAE | vs easy | vs medium | vs hard | vs expert | Saved |`,
+    `|-------|-------|---------|------|-----|---------|-----------|---------|-----------|-------|`);
 
-  // ── Phase 1b: RL self-play ─────────────────────────────────────────────────
+  // ── Phase 1b: NN-vs-NN self-play ──────────────────────────────────────────
 
-  const totalBatches  = Math.ceil(RL_TOTAL_GAMES / RL_BATCH_SIZE);
-  let gamesCompleted  = 0;
+  const totalBatches = Math.ceil(RL_TOTAL_GAMES / RL_BATCH_SIZE);
+  let gamesCompleted = 0;
 
   for (let batch = 1; batch <= totalBatches; batch++) {
     const batchGames = Math.min(RL_BATCH_SIZE, RL_TOTAL_GAMES - gamesCompleted);
-    console.log(`── Phase 1b batch ${batch}/${totalBatches} (${batchGames} games) ─────────────────`);
+    console.log(`── Phase 1b batch ${batch}/${totalBatches} (${batchGames} NN-vs-NN games) ────────────`);
 
-    // Collect RL data
-    process.stdout.write(`  Collecting data... `);
-    const t2 = Date.now();
-    const rlData = collectOutcomeData(batchGames, model);
+    t = Date.now();
+    process.stdout.write('  Collecting data... ');
+    const rlData = collectData(batchGames, 'nn', 'nn', model);
     totalSamples += rlData.length;
     gamesCompleted += batchGames;
-    process.stdout.write(`${rlData.length} samples in ${((Date.now()-t2)/1000).toFixed(1)}s  (total: ${totalSamples})\n`);
+    process.stdout.write(`${rlData.length} samples in ${((Date.now()-t)/1000).toFixed(1)}s  (total: ${totalSamples})\n`);
 
-    // Add to replay buffer
     replayBuffer.push(...rlData);
     if (replayBuffer.length > REPLAY_MAX) replayBuffer.splice(0, replayBuffer.length - REPLAY_MAX);
 
-    // Train on buffer sample
-    const trainData = replayBuffer.length > 20000
-      ? replayBuffer.slice(-20000)  // recent 20k for stability
-      : [...replayBuffer];
+    const trainData = replayBuffer.length > 20000 ? replayBuffer.slice(-20000) : [...replayBuffer];
     console.log(`  Training on ${trainData.length} samples (${EPOCHS_RL} epochs):`);
-    const t3 = Date.now();
+    t = Date.now();
     const { loss: rLoss, mae: rMae } = await trainModel(model, [...trainData], EPOCHS_RL, `1b-${batch}`);
-    console.log(`  Done in ${((Date.now()-t3)/1000).toFixed(1)}s  loss=${rLoss.toFixed(4)}  mae=${rMae.toFixed(4)}`);
+    console.log(`  Done in ${((Date.now()-t)/1000).toFixed(1)}s  loss=${rLoss.toFixed(4)}  mae=${rMae.toFixed(4)}`);
 
-    // Benchmark
-    console.log(`  Benchmark:`);
-    const t4 = Date.now();
+    console.log('  Benchmark:');
+    t = Date.now();
     const br = runBenchmark(model);
-    process.stdout.write(`    ${((Date.now()-t4)/1000).toFixed(1)}s  `);
+    process.stdout.write(`    ${((Date.now()-t)/1000).toFixed(1)}s  `);
     let savedThisBatch = false;
     for (const [d, r] of Object.entries(br)) {
       process.stdout.write(`vs ${d}: ${(r.nnFrac*100).toFixed(0)}%  `);
-      if (r.nnFrac > bestNNFrac[d] + 0.03) {
-        bestNNFrac[d] = r.nnFrac;
-        savedThisBatch = true;
-      }
+      if (r.nnFrac > bestNNFrac[d] + 0.03) { bestNNFrac[d] = r.nnFrac; savedThisBatch = true; }
     }
     process.stdout.write('\n');
 
-    const bRow = `| ${String(batch).padStart(5)} | ${String(gamesCompleted).padStart(5)} | ${String(totalSamples).padStart(7)} | ${rLoss.toFixed(4)} | ${rMae.toFixed(4)} | ${(br.medium.nnFrac*100).toFixed(0)}% | ${(br.hard.nnFrac*100).toFixed(0)}% | ${(br.expert.nnFrac*100).toFixed(0)}% | ${savedThisBatch ? '✓' : ''} |`;
-    logLines.push(bRow);
+    logLines.push(
+      `| ${String(batch).padStart(5)} | ${String(gamesCompleted).padStart(5)} | ${String(totalSamples).padStart(7)}` +
+      ` | ${rLoss.toFixed(4)} | ${rMae.toFixed(4)}` +
+      ` | ${(br.easy.nnFrac*100).toFixed(0)}%` +
+      ` | ${(br.medium.nnFrac*100).toFixed(0)}%` +
+      ` | ${(br.hard.nnFrac*100).toFixed(0)}%` +
+      ` | ${(br.expert.nnFrac*100).toFixed(0)}%` +
+      ` | ${savedThisBatch ? '✓' : ''} |`
+    );
     fs.writeFileSync(LOG_FILE, logLines.join('\n') + '\n');
     writeTSVRow(`1b_batch${batch}`, gamesCompleted, totalSamples, rLoss, rMae, br);
 
     if (savedThisBatch) {
       await model.save(`file://${MODEL_DIR}`);
-      console.log(`  ✓ New best — model saved`);
+      console.log('  ✓ New best — model saved');
     }
-
     console.log();
   }
 
-  // ── Summary ────────────────────────────────────────────────────────────────
+  // ── Summary ───────────────────────────────────────────────────────────────
 
   console.log(`${'═'.repeat(65)}`);
   console.log(`Training complete.  Total samples: ${totalSamples}`);
-  console.log(`Best win rates against:`);
   for (const [d, frac] of Object.entries(bestNNFrac)) {
     console.log(`  vs ${d.padEnd(6)}: ${(frac*100).toFixed(1)}%`);
   }
   console.log(`Model: ${MODEL_DIR}`);
   console.log(`Log:   ${LOG_FILE}`);
 
-  logLines.push('', `## Final summary`, '',
-    `Total samples: ${totalSamples}`,
+  logLines.push('', '## Final summary', '', `Total samples: ${totalSamples}`,
     ...Object.entries(bestNNFrac).map(([d, f]) => `Best vs ${d}: ${(f*100).toFixed(1)}%`));
   fs.writeFileSync(LOG_FILE, logLines.join('\n') + '\n');
 }
