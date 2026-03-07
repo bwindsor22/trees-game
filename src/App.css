@@ -2,6 +2,52 @@
   text-align: center;
 }
 
+/* ── Board + harvest area (desktop: side by side, mobile: stacked) ────── */
+
+.board-and-harvest {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* ── Mobile layout ──────────────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  /* Minimal padding so board fills the full screen width */
+  .container {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+
+  /* Stack cols vertically; board gets full width on mobile */
+  .row.mb-4 {
+    flex-direction: column;
+  }
+
+  /* Board fills full width; harvest area drops below */
+  .board-and-harvest {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Board stretches edge-to-edge */
+  .board-wrapper {
+    width: 100% !important;
+    padding-top: 40px;
+  }
+
+  /* Shrink the "End My Turn" row to fit small screens */
+  .mobile-turn-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Inventory / Available pieces — smaller font on mobile */
+  h5 {
+    font-size: 11px;
+  }
+}
+
 .App-logo {
   height: 40vmin;
   pointer-events: none;

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { DndProvider } from "react-dnd";
 import HTML5Backend from "react-dnd-html5-backend";
+import { TouchBackend } from "react-dnd-touch-backend";
 import Board from "./view/board/Board";
 import Inventory from "./view/inventory/index";
 import Available from "./view/available/index";
@@ -9,6 +10,11 @@ import Tutorial from "./view/Tutorial";
 import StartScreen from "./view/StartScreen";
 import { GameProvider, useGameState, COLOR_FILTERS } from "./view/board/GameContext";
 import { Container, Row, Col } from "react-bootstrap";
+import "./App.css";
+
+const isTouchDevice = () =>
+  typeof window !== 'undefined' &&
+  ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
 // Color swatch shown next to the player label
 const COLOR_SWATCHES = {
@@ -67,11 +73,11 @@ const GameContent = ({ playerColor }) => {
               style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', border: '1px solid #ccc', background: '#fff', cursor: 'pointer', color: '#666' }}
             >? How to Play</button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-            <CollectArea />
-            <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="board-and-harvest">
+            <div className="board-wrapper" style={{ flex: 1, minWidth: 0 }}>
               <Board boardState={boardState} />
             </div>
+            <CollectArea />
           </div>
         </Col>
 
@@ -282,8 +288,9 @@ const App = () => {
     return <StartScreen onStart={setGameConfig} />;
   }
 
+  const touch = isTouchDevice();
   return (
-    <DndProvider backend={HTML5Backend}>
+    <DndProvider backend={touch ? TouchBackend : HTML5Backend} options={touch ? { enableMouseEvents: true } : {}}>
       <GameProvider initialColor={gameConfig.color} initialDifficulty={gameConfig.difficulty} numAI={gameConfig.numAI}>
         <GameContent playerColor={gameConfig.color} />
       </GameProvider>

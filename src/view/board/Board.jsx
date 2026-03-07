@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { BoardSquare } from './BoardSquare'
 import { Piece } from './Piece'
 import { useGameState } from './GameContext'
@@ -36,28 +36,32 @@ const squareStyle = {
 // clip-path cuts through the circle center along the outward diagonal,
 // showing only the semicircle facing away from the board.
 
-const SUN_SIZE = 140
-const SUN_HALF = SUN_SIZE / 2
+const SUN_SIZE_DESKTOP = 140
+const SUN_SIZE_MOBILE  = 70
 
 // Position 0 = upper-right (NE), advances clockwise by 60° each step.
 // Base angle 45° = NE direction. Cumulative angle ensures transitions always go clockwise.
-const SUN_CONFIG = [
-  { style: { top: -SUN_HALF, left: `calc(78.5% - ${SUN_HALF}px)` } },           // 0: NE
-  { style: { top: `calc(50% - ${SUN_HALF}px)`, left: `calc(100% - ${SUN_HALF}px)` } }, // 1: E
-  { style: { top: `calc(100% - ${SUN_HALF}px)`, left: `calc(78.5% - ${SUN_HALF}px)` } }, // 2: SE
-  { style: { top: `calc(100% - ${SUN_HALF}px)`, left: `calc(21.5% - ${SUN_HALF}px)` } }, // 3: SW
-  { style: { top: `calc(50% - ${SUN_HALF}px)`, left: -SUN_HALF } },              // 4: W
-  { style: { top: -SUN_HALF, left: `calc(21.5% - ${SUN_HALF}px)` } },            // 5: NW
-]
+function sunConfig(half) {
+  return [
+    { style: { top: -half, left: `calc(78.5% - ${half}px)` } },           // 0: NE
+    { style: { top: `calc(50% - ${half}px)`, left: `calc(100% - ${half}px)` } }, // 1: E
+    { style: { top: `calc(100% - ${half}px)`, left: `calc(78.5% - ${half}px)` } }, // 2: SE
+    { style: { top: `calc(100% - ${half}px)`, left: `calc(21.5% - ${half}px)` } }, // 3: SW
+    { style: { top: `calc(50% - ${half}px)`, left: -half } },              // 4: W
+    { style: { top: -half, left: `calc(21.5% - ${half}px)` } },            // 5: NW
+  ];
+}
 
 // angle is cumulative degrees (grows monotonically so transitions always go clockwise)
-const SunVisual = ({ position, angle }) => {
-  const { style } = SUN_CONFIG[position]
+const SunVisual = ({ position, angle, sunSize }) => {
+  const half = sunSize / 2
+  const config = sunConfig(half)
+  const { style } = config[position]
   return (
     <div style={{
       position: 'absolute',
-      width: SUN_SIZE,
-      height: SUN_SIZE,
+      width: sunSize,
+      height: sunSize,
       borderRadius: '50%',
       background: 'radial-gradient(circle at 50% 50%, #fffde7 0%, #ffeb3b 35%, #f9a825 65%, #e65100 100%)',
       filter: 'drop-shadow(0 0 18px rgba(255, 200, 0, 0.85))',
@@ -73,6 +77,16 @@ const SunVisual = ({ position, angle }) => {
 
 const Board = ({ boardState }) => {
   const { sunPosition, sunRevolutions, visualShadowedSquares, lastTurnScores } = useGameState()
+  const boardRef = useRef(null)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const sunSize = isMobile ? SUN_SIZE_MOBILE : SUN_SIZE_DESKTOP
   // Cumulative angle grows monotonically so CSS transition always rotates clockwise
   const sunAngle = 45 + (sunRevolutions * 6 + sunPosition) * 60
 
@@ -165,8 +179,8 @@ const Board = ({ boardState }) => {
   }
 
   return (
-    <div style={{ position: 'relative' }}>
-      <SunVisual position={sunPosition} angle={sunAngle} />
+    <div style={{ position: 'relative' }} ref={boardRef}>
+      <SunVisual position={sunPosition} angle={sunAngle} sunSize={sunSize} />
       <div style={boardStyle}>
         {renderRow(getRowType0(0,   3), 'calc(3 * 100% / 14)')}
         {renderRow(getRowType1(10,  2), 'calc(100% / 7)')}

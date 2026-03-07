@@ -7,10 +7,11 @@
  *     Expert plays both sides; each state is labelled with the FINAL game
  *     outcome (score diff / OUTCOME_NORM → ≈[-1,1]).
  *
- *   Phase 1b — NN-vs-NN self-play (1,200 games = ~45,600 samples):
- *     NN plays both sides so the value function is calibrated to its OWN play,
- *     not to expert play.  Labels: final score diff (normalised).
- *     Benchmarks every 150 games vs easy / medium / hard / expert.
+ *   Phase 1b — Mixed curriculum (1,200 games = ~45,600 samples):
+ *     1/3 games: NN vs easy (random) as p1  → NN wins most → positive labels
+ *     1/3 games: easy (random) vs NN as p2  → NN wins most → positive labels
+ *     1/3 games: medium vs NN               → NN loses most → negative labels
+ *     Guarantees mixed +/- labels so the NN can learn to distinguish positions.
  *
  * Total samples: ~53,200 (> 50,000 target)
  *
@@ -43,11 +44,11 @@ const TSV_FILE    = path.resolve(__dirname, 'nn_training_data.tsv');
 const FEATURE_DIM = 68;
 
 const SUPERVISED_GAMES  = 200;
-const RL_TOTAL_GAMES    = 1200;
-const RL_BATCH_SIZE     = 150;
-const BENCHMARK_GAMES   = 20;   // games per difficulty per benchmark
+const RL_TOTAL_GAMES    = 3000;
+const RL_BATCH_SIZE     = 300;   // ~272s per batch with expert-vs-NN
+const BENCHMARK_GAMES   = 10;   // games per difficulty; benchmark target ≤10% of batch time
 
-const EPOCHS_SUPERVISED = 100;
+const EPOCHS_SUPERVISED = 50;   // fewer epochs to avoid overfitting Phase 1a data
 const EPOCHS_RL         = 100;
 const BATCH_SIZE        = 256;
 const REPLAY_MAX        = 55000;
@@ -272,8 +273,9 @@ function collectData(nGames, p1Type, p2Type, nnModel) {
 
         game.revolutions = revolution;
         const playerType = player === 'p1' ? p1Type : p2Type;
-        if (playerType === 'nn') runNNTurn(game, player, nnModel);
-        else                     runTurnWithEval(game, player, 2, evaluateExpert);
+        if      (playerType === 'nn')     runNNTurn(game, player, nnModel);
+        else if (playerType === 'basic')  runTurnWithEval(game, player, 2, evaluate);
+        else                              runTurnWithEval(game, player, 2, evaluateExpert);
       }
 
       if (isFinalRound) break;
@@ -331,13 +333,14 @@ async function trainModel(model, samples, epochs, label) {
 
 // ─── Benchmark ────────────────────────────────────────────────────────────────
 
-const DIFFICULTIES = ['easy', 'medium', 'hard', 'expert'];
+// 'hard' (depth 4) takes ~10s/game — excluded from benchmark to keep it ≤10% of batch time.
+// Difficulty scale: easy(random) < medium(basic/2) < expert(expert/2)
+const DIFFICULTIES = ['easy', 'medium', 'expert'];
 
 function runBenchmark(model) {
   const oppConfigs = {
     easy:   { type: 'random' },
     medium: { type: 'basic',  depth: 2 },
-    hard:   { type: 'basic',  depth: 4 },
     expert: { type: 'expert', depth: 2 },
   };
   const results = {};
@@ -367,7 +370,7 @@ async function main() {
   console.log(`\n${'═'.repeat(65)}`);
   console.log('  Photosynthesis NN Trainer  —  TensorFlow.js');
   console.log(`  Feature dim: ${FEATURE_DIM}  |  Architecture: ${FEATURE_DIM}→128→64→32→1`);
-  console.log(`  Phase 1a: ${SUPERVISED_GAMES} expert games  |  Phase 1b: ${RL_TOTAL_GAMES} NN-vs-NN games`);
+  console.log(`  Phase 1a: ${SUPERVISED_GAMES} expert games  |  Phase 1b: ${RL_TOTAL_GAMES} medium-vs-NN games`);
   console.log(`  Target samples: ${(SUPERVISED_GAMES + RL_TOTAL_GAMES) * 38} (> 50,000)`);
   console.log(`${'═'.repeat(65)}\n`);
 
@@ -390,8 +393,9 @@ async function main() {
   // Load or create model
   let model;
   const modelJsonPath = path.join(MODEL_DIR, 'model.json');
-  if (fs.existsSync(modelJsonPath)) {
-    console.log(`Loading existing model from ${MODEL_DIR}`);
+  const skipPhase1a = fs.existsSync(modelJsonPath);
+  if (skipPhase1a) {
+    console.log(`Loading existing model from ${MODEL_DIR} (skipping Phase 1a)`);
     model = await tf.loadLayersModel(`file://${modelJsonPath}`);
     model.compile({ optimizer: tf.train.adam(0.001), loss: 'meanSquaredError', metrics: ['mae'] });
     console.log(`  Loaded. Params: ${model.countParams()}\n`);
@@ -406,7 +410,7 @@ async function main() {
     `Started: ${new Date().toISOString()}`,
     `Arch: ${FEATURE_DIM}→128→64→32→1`,
     `Phase 1a: ${SUPERVISED_GAMES} expert-vs-expert games`,
-    `Phase 1b: ${RL_TOTAL_GAMES} NN-vs-NN games (${RL_BATCH_SIZE}/batch)`,
+    `Phase 1b: ${RL_TOTAL_GAMES} mixed-curriculum games (${RL_BATCH_SIZE}/batch)`,
     ``, `## Phase 1a — Expert games, outcome labels`,
   ];
 
@@ -416,50 +420,64 @@ async function main() {
 
   // ── Phase 1a: Expert-outcome warm-up ─────────────────────────────────────
 
-  console.log(`── Phase 1a: Expert games (${SUPERVISED_GAMES}) ───────────────────────────────`);
   let t = Date.now();
-  process.stdout.write('  Generating data... ');
-  const phase1aData = collectData(SUPERVISED_GAMES, 'expert', 'expert', null);
-  totalSamples += phase1aData.length;
-  process.stdout.write(`${phase1aData.length} samples in ${((Date.now()-t)/1000).toFixed(1)}s\n`);
-  replayBuffer.push(...phase1aData);
+  let sLoss = 0, sMae = 0;
+  if (!skipPhase1a) {
+    console.log(`── Phase 1a: Expert games (${SUPERVISED_GAMES}) ───────────────────────────────`);
+    process.stdout.write('  Generating data... ');
+    const phase1aData = collectData(SUPERVISED_GAMES, 'expert', 'expert', null);
+    totalSamples += phase1aData.length;
+    process.stdout.write(`${phase1aData.length} samples in ${((Date.now()-t)/1000).toFixed(1)}s\n`);
+    replayBuffer.push(...phase1aData);
 
-  console.log(`  Training (${EPOCHS_SUPERVISED} epochs):`);
-  t = Date.now();
-  const { loss: sLoss, mae: sMae } = await trainModel(model, [...phase1aData], EPOCHS_SUPERVISED, '1a');
-  console.log(`  Done in ${((Date.now()-t)/1000).toFixed(1)}s  loss=${sLoss.toFixed(4)}  mae=${sMae.toFixed(4)}\n`);
+    console.log(`  Training (${EPOCHS_SUPERVISED} epochs):`);
+    t = Date.now();
+    ({ loss: sLoss, mae: sMae } = await trainModel(model, [...phase1aData], EPOCHS_SUPERVISED, '1a'));
+    console.log(`  Done in ${((Date.now()-t)/1000).toFixed(1)}s  loss=${sLoss.toFixed(4)}  mae=${sMae.toFixed(4)}\n`);
 
-  console.log('  Benchmark after Phase 1a:');
-  t = Date.now();
-  const b0 = runBenchmark(model);
-  process.stdout.write(`    ${((Date.now()-t)/1000).toFixed(1)}s  `);
-  for (const [d, r] of Object.entries(b0)) {
-    process.stdout.write(`vs ${d}: ${r.nnWins}W/${r.oppWins}L  `);
-    logLines.push(`| Phase1a | vs ${d} | ${r.nnWins}W/${r.oppWins}L/${r.draws}D | ${(r.nnFrac*100).toFixed(0)}% |`);
-    bestNNFrac[d] = Math.max(bestNNFrac[d], r.nnFrac);
+    console.log('  Benchmark after Phase 1a:');
+    t = Date.now();
+    const b0 = runBenchmark(model);
+    process.stdout.write(`    ${((Date.now()-t)/1000).toFixed(1)}s  `);
+    for (const [d, r] of Object.entries(b0)) {
+      process.stdout.write(`vs ${d}: ${r.nnWins}W/${r.oppWins}L  `);
+      logLines.push(`| Phase1a | vs ${d} | ${r.nnWins}W/${r.oppWins}L/${r.draws}D | ${(r.nnFrac*100).toFixed(0)}% |`);
+      bestNNFrac[d] = Math.max(bestNNFrac[d], r.nnFrac);
+    }
+    process.stdout.write('\n');
+    writeTSVRow('1a', SUPERVISED_GAMES, totalSamples, sLoss, sMae, b0);
+
+    await model.save(`file://${MODEL_DIR}`);
+    console.log('  Model saved.\n');
+  } else {
+    console.log(`── Phase 1a: SKIPPED (model already exists) ─────────────────────────────`);
+    logLines.push('(Phase 1a skipped — existing model loaded)');
   }
-  process.stdout.write('\n');
-  writeTSVRow('1a', SUPERVISED_GAMES, totalSamples, sLoss, sMae, b0);
 
-  await model.save(`file://${MODEL_DIR}`);
-  console.log('  Model saved.\n');
+  logLines.push('', '## Phase 1b — Medium-vs-NN self-play', '',
+    `| Batch | Games | Samples | Loss | MAE | vs easy | vs medium | vs expert | Saved |`,
+    `|-------|-------|---------|------|-----|---------|-----------|-----------|-------|`);
 
-  logLines.push('', '## Phase 1b — NN-vs-NN self-play', '',
-    `| Batch | Games | Samples | Loss | MAE | vs easy | vs medium | vs hard | vs expert | Saved |`,
-    `|-------|-------|---------|------|-----|---------|-----------|---------|-----------|-------|`);
-
-  // ── Phase 1b: NN-vs-NN self-play ──────────────────────────────────────────
+  // ── Phase 1b: Expert-vs-NN self-play ──────────────────────────────────────
 
   const totalBatches = Math.ceil(RL_TOTAL_GAMES / RL_BATCH_SIZE);
   let gamesCompleted = 0;
 
   for (let batch = 1; batch <= totalBatches; batch++) {
     const batchGames = Math.min(RL_BATCH_SIZE, RL_TOTAL_GAMES - gamesCompleted);
-    console.log(`── Phase 1b batch ${batch}/${totalBatches} (${batchGames} NN-vs-NN games) ────────────`);
+    console.log(`── Phase 1b batch ${batch}/${totalBatches} (${batchGames} mixed: easy×2 + medium games) ─────`);
 
     t = Date.now();
     process.stdout.write('  Collecting data... ');
-    const rlData = collectData(batchGames, 'nn', 'nn', model);
+    // Mixed curriculum: half easy-vs-NN (NN wins most → positive labels),
+    // half medium-vs-NN (NN loses most → negative labels).
+    // This guarantees both +1 and -1 labels so the NN can learn to distinguish positions.
+    const third = Math.floor(batchGames / 3);
+    const rlData = [
+      ...collectData(third,                    'random', 'nn',   model),  // NN beats easy → + labels
+      ...collectData(third,                    'nn',    'random', model),  // NN beats easy → + labels
+      ...collectData(batchGames - 2 * third,   'basic', 'nn',    model),  // medium beats NN → - labels
+    ];
     totalSamples += rlData.length;
     gamesCompleted += batchGames;
     process.stdout.write(`${rlData.length} samples in ${((Date.now()-t)/1000).toFixed(1)}s  (total: ${totalSamples})\n`);
@@ -489,7 +507,6 @@ async function main() {
       ` | ${rLoss.toFixed(4)} | ${rMae.toFixed(4)}` +
       ` | ${(br.easy.nnFrac*100).toFixed(0)}%` +
       ` | ${(br.medium.nnFrac*100).toFixed(0)}%` +
-      ` | ${(br.hard.nnFrac*100).toFixed(0)}%` +
       ` | ${(br.expert.nnFrac*100).toFixed(0)}%` +
       ` | ${savedThisBatch ? '✓' : ''} |`
     );
