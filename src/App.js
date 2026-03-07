@@ -42,6 +42,8 @@ const GameContent = ({ playerColor }) => {
     aiThinking,
     difficulty,
     lastLpGainedAll,
+    playerOrder,
+    firstPlayer,
   } = useGameState();
 
   const [showTutorial, setShowTutorial] = useState(true);
@@ -149,13 +151,32 @@ const GameContent = ({ playerColor }) => {
               </span>
               <span style={{
                 fontSize: '11px', padding: '2px 7px', borderRadius: '4px',
-                background: difficulty === 'easy' ? '#e8f5e9' : difficulty === 'hard' ? '#fff3e0' : '#f3e5f5',
-                color: difficulty === 'easy' ? '#2e7d32' : difficulty === 'hard' ? '#e65100' : '#6a1b9a',
+                background: difficulty === 'easy' ? '#e8f5e9' : difficulty === 'hard' ? '#fff3e0' : difficulty === 'expert' ? '#fce4ec' : '#f3e5f5',
+                color: difficulty === 'easy' ? '#2e7d32' : difficulty === 'hard' ? '#e65100' : difficulty === 'expert' ? '#880e4f' : '#6a1b9a',
                 border: '1px solid currentColor', fontWeight: 'bold',
               }}>
-                {difficulty === 'easy' ? '🌱 Easy' : difficulty === 'hard' ? '⚔️ Hard' : '🌳 Med'}
+                {difficulty === 'easy' ? '🌱 Easy' : difficulty === 'hard' ? '⚔️ Hard' : difficulty === 'expert' ? '🏆 Expert' : '🌳 Med'}
               </span>
             </div>
+
+            {/* Turn order indicator */}
+            {isSetupComplete && (
+              <div style={{ fontSize: '11px', color: '#777', marginBottom: '4px' }}>
+                <span style={{ marginRight: 4 }}>Order:</span>
+                {playerOrder.map((p, i) => {
+                  const label = p === 'p1' ? 'You' : `AI ${aiPlayers.indexOf(p) + 1}`;
+                  const isFirst = i === 0;
+                  return (
+                    <span key={p}>
+                      {i > 0 && <span style={{ color: '#bbb', margin: '0 3px' }}>→</span>}
+                      <span style={{ fontWeight: isFirst ? 'bold' : 'normal', color: isFirst ? '#2e7d32' : '#777' }}>
+                        {isFirst && '🌱 '}{label}
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Round summary */}
             {Object.keys(lastLpGainedAll).length > 0 && isSetupComplete && (
@@ -173,6 +194,17 @@ const GameContent = ({ playerColor }) => {
                     AI {i + 1} +{lastLpGainedAll[p] || 0} LP
                   </span>
                 ))}
+                <div style={{ marginTop: '3px', borderTop: '1px solid #e0e0e0', paddingTop: '3px' }}>
+                  <span style={{ color: '#888', marginRight: 6 }}>Victory points:</span>
+                  <span style={{ color: '#388e3c', marginRight: 6 }}>
+                    You <strong>{score}</strong>
+                  </span>
+                  {aiPlayers.map((p, i) => (
+                    <span key={p} style={{ color: '#1565c0', marginRight: 6 }}>
+                      AI {i + 1} <strong>{scoreAll[p] || 0}</strong>
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -189,6 +221,7 @@ const GameContent = ({ playerColor }) => {
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 'bold', fontSize: '14px' }}>
                 <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: swatch, display: 'inline-block' }} />
                 You
+                {firstPlayer === 'p1' && <span title="Goes first this revolution" style={{ fontSize: '11px' }}>🌱</span>}
               </span>
               <span style={{ fontSize: '14px' }}>
                 <strong>{lp}</strong> light points
@@ -224,6 +257,7 @@ const GameContent = ({ playerColor }) => {
                 }}>
                   <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
                     <span style={{ filter: COLOR_FILTERS[colorKey], display: 'inline-block' }}>🤖</span> AI {i + 1}
+                    {firstPlayer === p && <span title="Goes first this revolution" style={{ fontSize: '11px' }}>🌱</span>}
                   </span>
                   <span style={{ fontSize: '14px' }}><strong>{aiLp}</strong> LP</span>
                   <span style={{ fontSize: '14px' }}>🏆 <strong>{aiScore}</strong> pts</span>

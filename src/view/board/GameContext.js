@@ -70,6 +70,12 @@ function calculatePhotosynthesisLP(boardState, lpShadows, owner) {
   return total;
 }
 
+// Compute player turn order for a given revolution count (rotates clockwise each revolution)
+function getPlayerOrder(playerList, revolutions) {
+  const offset = revolutions % playerList.length;
+  return [...playerList.slice(offset), ...playerList.slice(0, offset)];
+}
+
 const GameContext = createContext();
 
 // CSS filter strings for each player color choice
@@ -268,44 +274,73 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     if (newRevolutions >= 3) setIsFinalRound(true);
   }, []);
 
-  // Human ends their lifecycle turn → run each AI player in sequence → sun advances
+  // Human ends their turn → run post-p1 AIs → advance sun → run pre-p1 AIs for next round
   const endPlayerTurn = useCallback(() => {
     setAiThinking(true);
     const delay = difficulty === 'easy' ? 300 : difficulty === 'medium' ? 500 : 800;
 
-    function runAIChain(idx) {
-      if (idx >= aiPlayers.length) {
-        setCurrentPlayer('p1');
+    // Run a list of AI players sequentially with a given sun position for shadow-aware eval
+    function runAIList(list, sunPosForAI, onDone) {
+      function run(idx) {
+        if (idx >= list.length) { onDone(); return; }
+        const aiPlayer = list[idx];
+        setCurrentPlayerState(aiPlayer);
+        setTimeout(() => {
+          executeAITurn(
+            { ...lpAllRef.current },
+            { ...scoreAllRef.current },
+            difficulty,
+            aiPlayer,
+            sunPosForAI,
+            sunRevolutions,
+          );
+          setCurrentPlayer('p1');
+          run(idx + 1);
+        }, delay);
+      }
+      run(0);
+    }
+
+    // Current revolution's player order: only run AIs that come after p1
+    const currentOrder = getPlayerOrder(playerListRef.current, sunRevolutions);
+    const p1Idx = currentOrder.indexOf('p1');
+    const postP1AIs = currentOrder.slice(p1Idx + 1).filter(p => aiPlayers.includes(p));
+
+    runAIList(postP1AIs, sunPosition, () => {
+      setCurrentPlayer('p1');
+      clearTurnActions();
+
+      if (isFinalRound) {
         setCurrentPlayerState('p1');
-        clearTurnActions();
-        if (isFinalRound) {
-          // Final round is over — end the game
-          setIsGameOver(true);
-          setAiThinking(false);
-          return;
-        }
-        // Advance sun and photosynthesis for next round
-        const liveAfter = getBoardState();
-        advanceSunAndPhotosynthesis(liveAfter.boardState, sunPosition, sunRevolutions);
-        setCurrentPlayerState('p1');
+        setIsGameOver(true);
         setAiThinking(false);
         return;
       }
-      const aiPlayer = aiPlayers[idx];
-      setCurrentPlayerState(aiPlayer);
-      setTimeout(() => {
-        executeAITurn(
-          { ...lpAllRef.current },
-          { ...scoreAllRef.current },
-          difficulty,
-          aiPlayer,
-        );
-        setCurrentPlayer('p1'); // reset module-level state before next AI
-        runAIChain(idx + 1);
-      }, delay);
-    }
 
-    runAIChain(0);
+      // Advance sun; compute what the new revolution count will be for next player order
+      const newSunPos = (sunPosition + 1) % 6;
+      const completingRevolution = newSunPos === 0;
+      const newRevolutions = sunRevolutions + (completingRevolution ? 1 : 0);
+
+      const liveAfter = getBoardState();
+      advanceSunAndPhotosynthesis(liveAfter.boardState, sunPosition, sunRevolutions);
+
+      // Next revolution's order: run AIs that come before p1 before enabling human
+      const nextOrder = getPlayerOrder(playerListRef.current, newRevolutions);
+      const nextP1Idx = nextOrder.indexOf('p1');
+      const preP1AIs = nextOrder.slice(0, nextP1Idx).filter(p => aiPlayers.includes(p));
+
+      if (preP1AIs.length === 0) {
+        setCurrentPlayerState('p1');
+        setAiThinking(false);
+      } else {
+        runAIList(preP1AIs, newSunPos, () => {
+          clearTurnActions();
+          setCurrentPlayerState('p1');
+          setAiThinking(false);
+        });
+      }
+    });
   }, [difficulty, sunPosition, sunRevolutions, isFinalRound, advanceSunAndPhotosynthesis, aiPlayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetGame = useCallback(() => {
@@ -328,6 +363,10 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     setAiThinking(false);
     resetGameModule();
   }, []);
+
+  // Current revolution's player order (derived from sunRevolutions — no extra state needed)
+  const playerOrder = getPlayerOrder(playerListRef.current, sunRevolutions);
+  const firstPlayer = playerOrder[0];
 
   return (
     <GameContext.Provider value={{
@@ -365,6 +404,8 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
       difficulty,
       setDifficulty,
       playerColor,
+      playerOrder,
+      firstPlayer,
     }}>
       {children}
     </GameContext.Provider>

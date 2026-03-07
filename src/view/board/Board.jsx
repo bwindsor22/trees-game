@@ -39,35 +39,20 @@ const squareStyle = {
 const SUN_SIZE = 140
 const SUN_HALF = SUN_SIZE / 2
 
+// Position 0 = upper-right (NE), advances clockwise by 60° each step.
+// Base angle 45° = NE direction. Cumulative angle ensures transitions always go clockwise.
 const SUN_CONFIG = [
-  { // 0: upper-right — NE facing, cut NW→SE (UL→LR diagonal)
-    style: { top: -SUN_HALF, left: `calc(78.5% - ${SUN_HALF}px)` },
-    clip:  'polygon(0% 0%, 100% 0%, 100% 100%)',
-  },
-  { // 1: right — E facing, cut vertically
-    style: { top: `calc(50% - ${SUN_HALF}px)`, left: `calc(100% - ${SUN_HALF}px)` },
-    clip:  'polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%)',
-  },
-  { // 2: lower-right — SE facing, cut NE→SW (UR→LL diagonal)
-    style: { top: `calc(100% - ${SUN_HALF}px)`, left: `calc(78.5% - ${SUN_HALF}px)` },
-    clip:  'polygon(100% 0%, 100% 100%, 0% 100%)',
-  },
-  { // 3: lower-left — SW facing, cut NW→SE (UL→LR diagonal)
-    style: { top: `calc(100% - ${SUN_HALF}px)`, left: `calc(21.5% - ${SUN_HALF}px)` },
-    clip:  'polygon(0% 0%, 100% 100%, 0% 100%)',
-  },
-  { // 4: left — W facing, cut vertically
-    style: { top: `calc(50% - ${SUN_HALF}px)`, left: -SUN_HALF },
-    clip:  'polygon(0% 0%, 50% 0%, 50% 100%, 0% 100%)',
-  },
-  { // 5: upper-left — NW facing, cut NE→SW (UR→LL diagonal)
-    style: { top: -SUN_HALF, left: `calc(21.5% - ${SUN_HALF}px)` },
-    clip:  'polygon(0% 0%, 100% 0%, 0% 100%)',
-  },
+  { style: { top: -SUN_HALF, left: `calc(78.5% - ${SUN_HALF}px)` } },           // 0: NE
+  { style: { top: `calc(50% - ${SUN_HALF}px)`, left: `calc(100% - ${SUN_HALF}px)` } }, // 1: E
+  { style: { top: `calc(100% - ${SUN_HALF}px)`, left: `calc(78.5% - ${SUN_HALF}px)` } }, // 2: SE
+  { style: { top: `calc(100% - ${SUN_HALF}px)`, left: `calc(21.5% - ${SUN_HALF}px)` } }, // 3: SW
+  { style: { top: `calc(50% - ${SUN_HALF}px)`, left: -SUN_HALF } },              // 4: W
+  { style: { top: -SUN_HALF, left: `calc(21.5% - ${SUN_HALF}px)` } },            // 5: NW
 ]
 
-const SunVisual = ({ position }) => {
-  const { style, clip } = SUN_CONFIG[position]
+// angle is cumulative degrees (grows monotonically so transitions always go clockwise)
+const SunVisual = ({ position, angle }) => {
+  const { style } = SUN_CONFIG[position]
   return (
     <div style={{
       position: 'absolute',
@@ -76,16 +61,20 @@ const SunVisual = ({ position }) => {
       borderRadius: '50%',
       background: 'radial-gradient(circle at 50% 50%, #fffde7 0%, #ffeb3b 35%, #f9a825 65%, #e65100 100%)',
       filter: 'drop-shadow(0 0 18px rgba(255, 200, 0, 0.85))',
-      clipPath: clip,
+      clipPath: 'polygon(0% 0%, 100% 0%, 100% 50%, 0% 50%)',
+      transform: `rotate(${angle}deg)`,
       zIndex: 10,
       pointerEvents: 'none',
+      transition: 'top 0.5s ease-in-out, left 0.5s ease-in-out, transform 0.5s ease-in-out',
       ...style,
     }} />
   )
 }
 
 const Board = ({ boardState }) => {
-  const { sunPosition, visualShadowedSquares, lastTurnScores } = useGameState()
+  const { sunPosition, sunRevolutions, visualShadowedSquares, lastTurnScores } = useGameState()
+  // Cumulative angle grows monotonically so CSS transition always rotates clockwise
+  const sunAngle = 45 + (sunRevolutions * 6 + sunPosition) * 60
 
   function renderSquare(i, x, y, bkgd) {
     const boardKey = `${x},${y}`
@@ -177,7 +166,7 @@ const Board = ({ boardState }) => {
 
   return (
     <div style={{ position: 'relative' }}>
-      <SunVisual position={sunPosition} />
+      <SunVisual position={sunPosition} angle={sunAngle} />
       <div style={boardStyle}>
         {renderRow(getRowType0(0,   3), 'calc(3 * 100% / 14)')}
         {renderRow(getRowType1(10,  2), 'calc(100% / 7)')}

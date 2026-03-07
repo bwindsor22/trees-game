@@ -15,6 +15,7 @@ const pieceImages = {
   'tree-large': treeLargeImage,
 }
 
+
 // Color rotation order for AI players — rotated so first pick avoids player's color
 const AI_COLOR_ORDER = ['blue', 'orange', 'purple', 'green'];
 
@@ -60,7 +61,7 @@ export const Piece = ({ type, id, fillContainer = false, isFromInventory = false
     position: 'absolute',
     borderRadius: '50%',
     filter,
-  }
+  };
 
   return (
     <>

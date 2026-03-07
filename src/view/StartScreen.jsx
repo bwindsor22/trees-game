@@ -11,6 +11,7 @@ const DIFFICULTY_INFO = {
   easy:   { label: 'Easy',   emoji: '🌱', desc: 'AI picks from top moves randomly. Good for learning.' },
   medium: { label: 'Medium', emoji: '🌳', desc: 'AI always picks the best immediate move.' },
   hard:   { label: 'Hard',   emoji: '⚔️', desc: 'AI looks 4 moves ahead. A real challenge.' },
+  expert: { label: 'Expert', emoji: '🏆', desc: 'Trained via self-play. Depth-4 search with optimised strategy.' },
 };
 
 const StartScreen = ({ onStart }) => {
