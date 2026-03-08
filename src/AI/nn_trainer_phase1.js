@@ -100,11 +100,11 @@ function extractFeatures(state, aiPlayer, sunPos, revolution) {
 
 function createModel() {
   const model = tf.sequential({ layers: [
-    tf.layers.dense({ inputShape: [FEATURE_DIM], units: 128, activation: 'relu', kernelInitializer: 'glorotUniform' }),
+    tf.layers.dense({ inputShape: [FEATURE_DIM], units: 256, activation: 'relu', kernelInitializer: 'glorotUniform' }),
+    tf.layers.dropout({ rate: 0.1 }),
+    tf.layers.dense({ units: 128, activation: 'relu' }),
     tf.layers.dropout({ rate: 0.1 }),
     tf.layers.dense({ units: 64, activation: 'relu' }),
-    tf.layers.dropout({ rate: 0.1 }),
-    tf.layers.dense({ units: 32, activation: 'relu' }),
     tf.layers.dense({ units: 1, activation: 'linear' }),
   ]});
   model.compile({ optimizer: tf.train.adam(0.001), loss: 'meanSquaredError', metrics: ['mae'] });
@@ -286,11 +286,11 @@ async function train(model, replay, samples) {
 
 async function main() {
   const startTime = Date.now();
-  const MAX_MS    = 2.5 * 60 * 60 * 1000;   // 2.5 hours
+  const MAX_MS    = 3 * 60 * 60 * 1000;   // 3 hours
 
   console.log('═'.repeat(65));
   console.log('  Photosynthesis NN Trainer  —  Phase 1 Distillation');
-  console.log(`  Feature dim: ${FEATURE_DIM}  |  Architecture: ${FEATURE_DIM}→128→64→32→1`);
+  console.log(`  Feature dim: ${FEATURE_DIM}  |  Architecture: ${FEATURE_DIM}→256→128→64→1`);
   console.log(`  Teacher: evaluateExpert  |  Batch: ${BATCH_GAMES} games  |  Norm: ${EVAL_NORM}`);
   console.log('═'.repeat(65));
 
