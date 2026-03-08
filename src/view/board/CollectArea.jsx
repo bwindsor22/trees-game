@@ -10,7 +10,7 @@ const RING_LABELS = ['🍃🍃🍃🍃', '🍃🍃🍃', '🍃🍃', '🍃'];
 const isMobileView = () => typeof window !== 'undefined' && window.innerWidth < 768;
 
 const CollectArea = () => {
-  const { lp, scorePiles, aiThinking } = useGameState();
+  const { lp, scorePiles, aiThinking, isMobile, selectedPiece, setSelectedPiece } = useGameState();
   const [expanded, setExpanded] = useState(false);
   const mobile = isMobileView();
 
@@ -24,8 +24,18 @@ const CollectArea = () => {
     }),
   });
 
-  const borderColor = isOver ? (canDrop ? '#2e7d32' : '#c62828') : '#bdbdbd';
-  const bg = isOver && canDrop ? 'rgba(46,125,50,0.10)' : 'rgba(255,255,255,0.6)';
+  const canTapHarvest = isMobile && !!selectedPiece && !aiThinking && canMovePiece(selectedPiece, 0, 0, 'inventory', lp);
+
+  const handleTap = isMobile ? (e) => {
+    e.stopPropagation();
+    if (selectedPiece && !aiThinking && canMovePiece(selectedPiece, 0, 0, 'inventory', lp)) {
+      movePiece(selectedPiece, 0, 0, 'inventory');
+    }
+    setSelectedPiece(null);
+  } : undefined;
+
+  const borderColor = isOver ? (canDrop ? '#2e7d32' : '#c62828') : canTapHarvest ? '#2e7d32' : '#bdbdbd';
+  const bg = (isOver && canDrop) || canTapHarvest ? 'rgba(46,125,50,0.10)' : 'rgba(255,255,255,0.6)';
 
   if (mobile && !expanded) {
     // Collapsed strip: "🏆 Harvest  22pts · 19pts · 16pts · 14pts  ▸"
@@ -36,7 +46,7 @@ const CollectArea = () => {
       <div
         ref={drop}
         className="collect-area-mobile"
-        onClick={() => setExpanded(true)}
+        onClick={canTapHarvest ? handleTap : () => setExpanded(true)}
         style={{
           border: `2px dashed ${borderColor}`,
           background: bg,
@@ -60,6 +70,7 @@ const CollectArea = () => {
   return (
     <div
       ref={drop}
+      onClick={handleTap}
       style={{
         width: mobile ? '100%' : '150px',
         minHeight: mobile ? 0 : '160px',
@@ -74,6 +85,7 @@ const CollectArea = () => {
         padding: '8px 4px',
         textAlign: 'center',
         flexShrink: 0,
+        cursor: canTapHarvest ? 'pointer' : undefined,
         transition: 'border-color 0.15s, background 0.15s',
       }}
     >

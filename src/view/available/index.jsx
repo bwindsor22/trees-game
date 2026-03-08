@@ -3,6 +3,7 @@ import { useDrop } from 'react-dnd';
 import ItemTypes from '../board/ItemTypes';
 import { Piece } from '../board/Piece';
 import { canMovePiece, movePiece } from '../board/Game';
+import { useGameState } from '../board/GameContext';
 import './available.css';
 
 const Available = ({ piecesAvailable, lp, owner = 'p1', disabled = false }) => {
@@ -31,6 +32,8 @@ const Available = ({ piecesAvailable, lp, owner = 'p1', disabled = false }) => {
 };
 
 const AvailableSlot = ({ position, piece, lp, owner = 'p1', disabled = false }) => {
+  const { isMobile, selectedPiece, setSelectedPiece } = useGameState();
+
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ItemTypes.PIECE,
     canDrop: (item) => !disabled && canMovePiece(item.id, position, 0, 'available', lp),
@@ -41,10 +44,20 @@ const AvailableSlot = ({ position, piece, lp, owner = 'p1', disabled = false }) 
     }),
   });
 
+  const canTapBuy = isMobile && !!selectedPiece && !disabled && canMovePiece(selectedPiece, position, 0, 'available', lp);
+
+  const handleTap = isMobile ? () => {
+    if (selectedPiece && !disabled && canMovePiece(selectedPiece, position, 0, 'available', lp)) {
+      movePiece(selectedPiece, position, 0, 'available');
+    }
+    setSelectedPiece(null);
+  } : undefined;
+
   return (
     <div
       ref={drop}
-      className={`available-slot ${isOver ? (canDrop ? 'can-drop' : 'no-drop') : ''}`}
+      onClick={handleTap}
+      className={`available-slot ${isOver ? (canDrop ? 'can-drop' : 'no-drop') : ''} ${canTapBuy ? 'can-drop' : ''}`}
     >
       {piece && <Piece type={piece.type} id={piece.id} fillContainer={true} lp={lp} isFromInventory={false} owner={owner} disabled={disabled} />}
     </div>

@@ -125,6 +125,15 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
   const [aiThinking, setAiThinking] = useState(false);
   const [difficulty, setDifficulty] = useState(initialDifficulty);
 
+  // Tap-to-move (mobile): which piece id is currently selected
+  const [selectedPiece, setSelectedPiece] = useState(null);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   // Refs to avoid stale closures in async callbacks
   const lpAllRef = useRef(Object.fromEntries(playerListRef.current.map(p => [p, 0])));
   const scoreAllRef = useRef(Object.fromEntries(playerListRef.current.map(p => [p, 0])));
@@ -361,6 +370,7 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     setIsGameOver(false);
     setCurrentPlayerState('p1');
     setAiThinking(false);
+    setSelectedPiece(null);
     resetGameModule();
   }, []);
 
@@ -406,6 +416,9 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
       playerColor,
       playerOrder,
       firstPlayer,
+      isMobile,
+      selectedPiece,
+      setSelectedPiece,
     }}>
       {children}
     </GameContext.Provider>

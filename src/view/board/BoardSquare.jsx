@@ -7,8 +7,7 @@ import Overlay from './Overlay'
 import { useGameState } from './GameContext'
 
 export const BoardSquare = ({ x, y, bkgd, isShadowed, children }) => {
-  const { lp, aiThinking } = useGameState();
-  // Board drops disabled during AI turn
+  const { lp, aiThinking, isMobile, selectedPiece, setSelectedPiece } = useGameState();
 
   const [{ isOver, canDrop, dragItem }, drop] = useDrop({
     accept: ItemTypes.PIECE,
@@ -25,6 +24,15 @@ export const BoardSquare = ({ x, y, bkgd, isShadowed, children }) => {
     ? getDropHint(dragItem.id, x, y, lp)
     : null;
 
+  const canTapDrop = isMobile && !!selectedPiece && !aiThinking && canMovePiece(selectedPiece, x, y, 'board', lp);
+
+  const handleTap = isMobile ? () => {
+    if (selectedPiece && !aiThinking && canMovePiece(selectedPiece, x, y, 'board', lp)) {
+      movePiece(selectedPiece, x, y, 'board');
+    }
+    setSelectedPiece(null);
+  } : undefined;
+
   const black = (x + y) % 2 === 1
 
   return (
@@ -32,11 +40,13 @@ export const BoardSquare = ({ x, y, bkgd, isShadowed, children }) => {
       ref={drop}
       data-board-x={x}
       data-board-y={y}
+      onClick={handleTap}
       style={{
         position: 'relative',
         display: 'block',
         width: '100%',
         height: '100%',
+        cursor: canTapDrop ? 'pointer' : undefined,
       }}
     >
       <Square black={black} bkgd={bkgd}>{children}</Square>
@@ -50,6 +60,7 @@ export const BoardSquare = ({ x, y, bkgd, isShadowed, children }) => {
           pointerEvents: 'none',
         }} />
       )}
+      {canTapDrop && <Overlay color="lightgreen" />}
       {isOver && !canDrop && <Overlay color="red" />}
       {!isOver && canDrop && <Overlay color="lightgreen" />}
       {isOver && canDrop && <Overlay color="darkgreen" />}

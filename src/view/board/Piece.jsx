@@ -27,15 +27,17 @@ function getAIFilter(playerColor, ownerIndex) {
 }
 
 export const Piece = ({ type, id, fillContainer = false, isFromInventory = false, owner = 'p1', disabled = false }) => {
-  const { playerColor } = useGameState();
+  const { playerColor, isMobile, selectedPiece, setSelectedPiece } = useGameState();
   const [{ isDragging }, drag, preview] = useDrag({
     type: ItemTypes.PIECE,
     item: { type: ItemTypes.PIECE, id },
-    canDrag: () => !disabled,
+    canDrag: () => !disabled && !isMobile,
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
   })
+
+  const isSelected = isMobile && selectedPiece === id;
 
   const pieceImage = pieceImages[type] || seedImage
   let filter;
@@ -63,20 +65,28 @@ export const Piece = ({ type, id, fillContainer = false, isFromInventory = false
     filter,
   };
 
+  const handleTap = (isMobile && !disabled) ? (e) => {
+    e.stopPropagation();
+    setSelectedPiece(selectedPiece === id ? null : id);
+  } : undefined;
+
   return (
     <>
       <DragPreviewImage connect={preview} src={pieceImage} />
       <div
         ref={drag}
+        onClick={handleTap}
         style={{
           fontSize: 40,
           fontWeight: 'bold',
-          cursor: disabled ? 'default' : 'move',
+          cursor: disabled ? 'default' : isMobile ? 'pointer' : 'move',
           color: 'black',
           opacity: isDragging ? 0.5 : 1,
           position: 'relative',
           width: '100%',
           height: '100%',
+          outline: isSelected ? '3px solid #f9a825' : 'none',
+          borderRadius: '50%',
         }}
       >
         <img
