@@ -64,10 +64,11 @@ function findOpenSlot(type, inv) {
 function initPlayerInventory(startId) {
   let id = startId;
   const avail = {}, inv = {};
-  avail[id++] = { type: 'seed',       position: 0 };
-  avail[id++] = { type: 'seed',       position: 1 };
-  avail[id++] = { type: 'tree-small', position: 2 };
-  avail[id++] = { type: 'tree-small', position: 3 };
+  avail[id++] = { type: 'seed',        position: 0 };
+  avail[id++] = { type: 'seed',        position: 1 };
+  avail[id++] = { type: 'tree-small',  position: 2 };
+  avail[id++] = { type: 'tree-small',  position: 3 };
+  avail[id++] = { type: 'tree-medium', position: 4 };
   for (let i = 0; i < 4; i++) inv[id++] = { type: 'seed',        position: i };
   for (let i = 0; i < 4; i++) inv[id++] = { type: 'tree-small',  position: i + 4 };
   for (let i = 0; i < 3; i++) inv[id++] = { type: 'tree-medium', position: i + 8 };
