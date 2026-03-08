@@ -24,3 +24,7 @@ yarn-error.log*
 
 # resources (PDFs, PSD originals, reference images)
 /resources
+
+# Local-only game metadata (contains actual game names)
+resources/name.txt
+resources/research.md
