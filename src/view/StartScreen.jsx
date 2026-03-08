@@ -122,9 +122,6 @@ const StartScreen = ({ onStart }) => {
         <div style={{ marginBottom: '24px' }}>
           <label style={{ display: 'block', fontWeight: 'bold', color: '#333', marginBottom: '10px', fontSize: '14px' }}>
             Rounds
-            <span style={{ fontWeight: 'normal', color: '#777', marginLeft: '8px', fontSize: '12px' }}>
-              (AI trained for 3)
-            </span>
           </label>
           <div style={{ display: 'flex', gap: '8px' }}>
             {[3, 4].map(r => (
