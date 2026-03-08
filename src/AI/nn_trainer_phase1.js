@@ -36,7 +36,8 @@ const LOG_FILE        = path.resolve(__dirname, 'nn_phase1_log.md');
 const FEATURE_DIM     = 68;
 
 const BATCH_GAMES     = 200;   // games per training batch
-const BENCHMARK_GAMES = 10;    // games per difficulty in benchmark
+const BENCHMARK_GAMES = 5;     // games per difficulty in benchmark
+const BENCHMARK_EVERY = 2;     // run benchmark every N batches
 const EPOCHS          = 100;
 const MINI_BATCH      = 256;
 const REPLAY_MAX      = 100_000;
@@ -322,13 +323,17 @@ async function main() {
     const trainSec = ((Date.now() - t1) / 1000).toFixed(1);
     console.log(`  Done in ${trainSec}s  loss=${loss.toFixed(4)}  mae=${mae.toFixed(4)}`);
 
-    // Benchmark
-    process.stdout.write(`  Benchmark (${BENCHMARK_GAMES} games each):`);
-    const t2 = Date.now();
-    const res = benchmark(model, BENCHMARK_GAMES);
-    const benchSec = ((Date.now() - t2) / 1000).toFixed(1);
-    const line = Object.entries(res).map(([k, v]) => `vs ${k}: ${v}%`).join('  ');
-    console.log(`  ${benchSec}s  ${line}`);
+    // Benchmark (every BENCHMARK_EVERY batches)
+    let line = '(skipped)';
+    let benchSec = '0';
+    if (batch % BENCHMARK_EVERY === 0) {
+      process.stdout.write(`  Benchmark (${BENCHMARK_GAMES} games each):`);
+      const t2 = Date.now();
+      const res = benchmark(model, BENCHMARK_GAMES);
+      benchSec = ((Date.now() - t2) / 1000).toFixed(1);
+      line = Object.entries(res).map(([k, v]) => `vs ${k}: ${v}%`).join('  ');
+      console.log(`  ${benchSec}s  ${line}`);
+    }
 
     // Save checkpoint
     await saveModel(model);
