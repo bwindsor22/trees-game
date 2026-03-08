@@ -14,6 +14,7 @@ import { DndProvider } from 'react-dnd';
 import HTML5Backend from 'react-dnd-html5-backend';
 import Board from './Board';
 import { GameProvider } from './GameContext';
+import { ALL_COORDS } from '../../AI/sim_core';
 
 // Wrap with required providers
 function BoardWrapper({ boardState = {} }) {
@@ -83,28 +84,15 @@ describe('Board layout', () => {
 
 describe('Board coordinate coverage', () => {
   test('all 37 hex coordinates are represented in the rendered grid', () => {
-    // These are ALL_COORDS from sim_core — the canonical hex grid
-    const expectedCoords = [
-      [0,0],
-      [-1,1],[1,1],[-2,0],[2,0],[-1,-1],[1,-1],
-      [-2,2],[0,2],[2,2],[-3,1],[-1,1],[1,1],[3,1],
-      [-3,-1],[-1,-1],[1,-1],[3,-1],[-2,-2],[0,-2],[2,-2],
-      [-3,3],[-1,3],[1,3],[3,3],[-4,2],[-2,2],[0,2],[2,2],[4,2],
-      // outer ring
-      [-6,0],[-5,1],[-4,2],[-3,3],
-      [3,3],[4,2],[5,1],[6,0],
-      [5,-1],[4,-2],[3,-3],
-      [-3,-3],[-4,-2],[-5,-1],
-    ];
+    expect(ALL_COORDS).toHaveLength(37);
 
     const boardState = Object.fromEntries(
-      expectedCoords.slice(0, 5).map(([x, y], i) => [
+      ALL_COORDS.slice(0, 5).map(([x, y], i) => [
         `${x},${y}`,
         { type: 'seed', id: i, owner: 'p1' }
       ])
     );
 
-    // Simply verify rendering doesn't crash with various positions populated
     expect(() => render(<BoardWrapper boardState={boardState} />)).not.toThrow();
   });
 });
