@@ -425,7 +425,7 @@ function initPlayerInventory(player, startId) {
   };
   for (let i = 0; i < 4; i++) { inventories[player][id] = { type: 'seed', position: i }; id++; }
   for (let i = 0; i < 4; i++) { inventories[player][id] = { type: 'tree-small', position: i + 4 }; id++; }
-  for (let i = 0; i < 2; i++) { inventories[player][id] = { type: 'tree-medium', position: i + 8 }; id++; }
+  for (let i = 0; i < 3; i++) { inventories[player][id] = { type: 'tree-medium', position: i + 8 }; id++; }
   for (let i = 0; i < 2; i++) { inventories[player][id] = { type: 'tree-large', position: i + 11 }; id++; }
   return id;
 }
