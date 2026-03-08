@@ -86,7 +86,7 @@ export const COLOR_FILTERS = {
   orange: 'hue-rotate(30deg) saturate(2) brightness(1.1)',
 };
 
-export const GameProvider = ({ children, initialColor = 'green', initialDifficulty = 'medium', numAI = 1 }) => {
+export const GameProvider = ({ children, initialColor = 'green', initialDifficulty = 'medium', numAI = 1, maxRevolutions = 3 }) => {
   // playerList: ['p1', 'p2'] for 1 AI, ['p1','p2','p3'] for 2 AI, etc.
   const playerListRef = useRef(['p1', ...Array.from({ length: numAI }, (_, i) => `p${i + 2}`)]);
   const aiPlayers = playerListRef.current.slice(1); // all non-p1
@@ -280,8 +280,8 @@ export const GameProvider = ({ children, initialColor = 'green', initialDifficul
     setLastTurnScores(scores);
 
     // After 3 revolutions: trigger final round (everyone plays once more, then game over)
-    if (newRevolutions >= 3) setIsFinalRound(true);
-  }, []);
+    if (newRevolutions >= maxRevolutions) setIsFinalRound(true);
+  }, [maxRevolutions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Human ends their turn → run post-p1 AIs → advance sun → run pre-p1 AIs for next round
   const endPlayerTurn = useCallback(() => {

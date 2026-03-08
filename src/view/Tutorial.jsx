@@ -106,6 +106,31 @@ const STEPS = [
   {
     title: 'Welcome to Photosynthesis 🌳',
     body: 'Grow trees on a hexagonal forest board, earn light points from the sun, and harvest large trees for scoring tokens. The player with the most points after 3 sun revolutions wins.',
+    diagram: (
+      <div style={{ marginTop: 10, fontFamily: 'sans-serif', fontSize: '12px', color: '#555' }}>
+        <div style={{ marginBottom: 6 }}>Video guides:</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <a
+            href="https://www.youtube.com/watch?v=GkwW_vOlmEY"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#1565c0', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <span style={{ fontSize: '16px' }}>▶</span>
+            <span>How to Play (3 mins)</span>
+          </a>
+          <a
+            href="https://www.youtube.com/watch?v=c2e6hno4Enk"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#1565c0', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <span style={{ fontSize: '16px' }}>▶</span>
+            <span>How to Play (8 mins)</span>
+          </a>
+        </div>
+      </div>
+    ),
   },
 
   {

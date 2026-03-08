@@ -18,6 +18,7 @@ const StartScreen = ({ onStart }) => {
   const [color, setColor] = useState('green');
   const [numAI, setNumAI] = useState(1);
   const [difficulty, setDifficulty] = useState('medium');
+  const [rounds, setRounds] = useState(3);
 
   const totalPlayers = 1 + numAI;
 
@@ -117,6 +118,41 @@ const StartScreen = ({ onStart }) => {
           </div>
         </div>
 
+        {/* Rounds */}
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', fontWeight: 'bold', color: '#333', marginBottom: '10px', fontSize: '14px' }}>
+            Rounds
+            <span style={{ fontWeight: 'normal', color: '#777', marginLeft: '8px', fontSize: '12px' }}>
+              (AI trained for 3)
+            </span>
+          </label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {[3, 4].map(r => (
+              <button
+                key={r}
+                onClick={() => setRounds(r)}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '8px',
+                  border: rounds === r ? '2px solid #1b5e20' : '1px solid #ddd',
+                  background: rounds === r ? '#e8f5e9' : '#fff',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontFamily: 'sans-serif',
+                  color: rounds === r ? '#1b5e20' : '#444',
+                  fontWeight: rounds === r ? 'bold' : 'normal',
+                }}
+              >
+                {r} rounds
+                <div style={{ fontSize: '10px', fontWeight: 'normal', marginTop: '2px', color: '#888' }}>
+                  {r === 3 ? '18 turns' : '24 turns'}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Difficulty */}
         <div style={{ marginBottom: '32px' }}>
           <label style={{ display: 'block', fontWeight: 'bold', color: '#333', marginBottom: '10px', fontSize: '14px' }}>
@@ -156,7 +192,7 @@ const StartScreen = ({ onStart }) => {
 
         {/* Start button */}
         <button
-          onClick={() => onStart({ color, numAI, difficulty })}
+          onClick={() => onStart({ color, numAI, difficulty, rounds })}
           style={{
             width: '100%',
             padding: '14px',

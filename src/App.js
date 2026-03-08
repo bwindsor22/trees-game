@@ -313,6 +313,18 @@ const GameContent = ({ playerColor }) => {
           })}
         </Col>
       </Row>
+      <div style={{
+        marginTop: '32px',
+        padding: '8px 12px',
+        borderTop: '1px solid #e0e0e0',
+        fontSize: '10px',
+        color: '#aaa',
+        textAlign: 'center',
+        lineHeight: 1.5,
+        fontFamily: 'sans-serif',
+      }}>
+        Our games are original digital implementations of classic abstract strategy mechanics. We are fans of the tabletop industry and encourage players to support the official physical releases of the games that inspired us.
+      </div>
     </Container>
   );
 };
@@ -327,7 +339,7 @@ const App = () => {
   const touch = isTouchDevice();
   return (
     <DndProvider backend={touch ? TouchBackend : HTML5Backend} options={touch ? { enableMouseEvents: true } : {}}>
-      <GameProvider initialColor={gameConfig.color} initialDifficulty={gameConfig.difficulty} numAI={gameConfig.numAI}>
+      <GameProvider initialColor={gameConfig.color} initialDifficulty={gameConfig.difficulty} numAI={gameConfig.numAI} maxRevolutions={gameConfig.rounds || 3}>
         <GameContent playerColor={gameConfig.color} />
       </GameProvider>
     </DndProvider>
