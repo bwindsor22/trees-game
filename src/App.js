@@ -73,11 +73,45 @@ const GameContent = ({ playerColor }) => {
               style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', border: '1px solid #ccc', background: '#fff', cursor: 'pointer', color: '#666' }}
             >? How to Play</button>
           </div>
+
+          {/* Mobile-only top bar: End My Turn + LP */}
+          <div className="mobile-only" style={{
+            alignItems: 'center', gap: '8px', flexWrap: 'wrap',
+            padding: '5px 6px', marginBottom: '6px',
+            background: aiThinking ? '#f5f5f5' : '#fffde7',
+            border: '1px solid #f9a825', borderRadius: '8px',
+          }}>
+            <button
+              onClick={endPlayerTurn}
+              disabled={!isHumanTurn || isGameOver}
+              style={{
+                fontSize: '14px', fontWeight: 'bold',
+                cursor: (!isHumanTurn || isGameOver) ? 'default' : 'pointer',
+                background: 'transparent', border: 'none', padding: '0',
+                opacity: (!isHumanTurn || isGameOver) ? 0.6 : 1,
+              }}
+            >
+              {aiThinking ? '🤖 AI thinking…' : '☀️ End My Turn'}
+            </button>
+            <span style={{ fontSize: '12px', color: '#555' }}>
+              <strong>{lp}</strong> LP · 🏆 <strong>{score}</strong>
+            </span>
+            <span style={{ fontSize: '12px', color: isFinalRound ? '#e65100' : '#888', marginLeft: 'auto' }}>
+              Sun {sunPosition + 1}/6 · Rev {sunRevolutions + 1}/3{isFinalRound ? ' · Final!' : ''}
+            </span>
+          </div>
+
           <div className="board-and-harvest">
             <div className="board-wrapper" style={{ flex: 1, minWidth: 0 }}>
               <Board boardState={boardState} />
             </div>
             <CollectArea />
+          </div>
+
+          {/* Mobile-only: Available directly below board */}
+          <div className="mobile-only" style={{ flexDirection: 'column', marginTop: '6px' }}>
+            <h5 style={{ marginBottom: '4px', fontSize: '13px', color: '#555' }}>Available</h5>
+            <Available piecesAvailable={piecesAvailable} lp={lp} owner="p1" disabled={aiThinking || currentPlayer !== 'p1'} />
           </div>
         </Col>
 
@@ -133,8 +167,8 @@ const GameContent = ({ playerColor }) => {
             </div>
           )}
 
-          {/* Turn / sun controls */}
-          <div style={{ marginTop: '16px', marginBottom: '14px' }}>
+          {/* Turn / sun controls (desktop only — mobile uses top bar above board) */}
+          <div className="desktop-only" style={{ marginTop: '16px', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
               <button
                 onClick={endPlayerTurn}
@@ -237,8 +271,10 @@ const GameContent = ({ playerColor }) => {
               </span>
               <span style={{ fontSize: '14px' }}>🏆 <strong>{score}</strong> pts</span>
             </div>
-            <h5 style={{ marginBottom: '4px', fontSize: '13px', color: '#555' }}>Available</h5>
-            <Available piecesAvailable={piecesAvailable} lp={lp} owner="p1" disabled={aiThinking || currentPlayer !== 'p1'} />
+            <h5 className="desktop-only" style={{ marginBottom: '4px', fontSize: '13px', color: '#555' }}>Available</h5>
+            <div className="desktop-only">
+              <Available piecesAvailable={piecesAvailable} lp={lp} owner="p1" disabled={aiThinking || currentPlayer !== 'p1'} />
+            </div>
             <h5 style={{ marginBottom: '4px', fontSize: '13px', color: '#555' }}>Store</h5>
             <Inventory piecesInInventory={piecesInInventory} lp={lp} owner="p1" disabled={aiThinking || currentPlayer !== 'p1'} />
           </div>

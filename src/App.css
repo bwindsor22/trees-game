@@ -12,7 +12,13 @@
 
 /* ── Mobile layout ──────────────────────────────────────────────────────── */
 
+/* Show/hide helpers */
+.mobile-only { display: none !important; }
+
 @media (max-width: 767px) {
+  .mobile-only  { display: flex !important; }
+  .desktop-only { display: none !important; }
+
   /* Minimal padding so board fills the full screen width */
   .container {
     padding-left: 4px !important;
@@ -27,7 +33,7 @@
   /* Board fills full width; harvest area drops below */
   .board-and-harvest {
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
   }
 
   /* Board stretches edge-to-edge */
@@ -36,10 +42,16 @@
     padding-top: 40px;
   }
 
-  /* Shrink the "End My Turn" row to fit small screens */
-  .mobile-turn-row {
-    flex-wrap: wrap;
-    gap: 6px;
+  /* CollectArea: collapse to thin strip on mobile */
+  .collect-area-mobile {
+    width: 100% !important;
+    min-height: 0 !important;
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    padding: 5px 10px !important;
+    gap: 8px !important;
+    border-radius: 6px !important;
+    cursor: pointer;
   }
 
   /* Inventory / Available pieces — smaller font on mobile */
